@@ -31,8 +31,7 @@
 
 ## 📱 支援平台
 
-- **iOS / iPadOS** >= 17.0
-- **macOS** >= 11.0（Apple Silicon Only）
+- **Android** >= 6.0
 
 ---
 
@@ -44,8 +43,7 @@
 
 ## 🛠️ 技術棧
 
-- **SwiftUI** — 全 UI 框架
-- **ActivityKit + WidgetKit** — Dynamic Island / 鎖定螢幕小工具
+- **Flutter** — 全 UI 框架
 - **Vision** — 驗證碼 OCR 辨識
 - **WKWebView** — 學校系統登入與資料擷取
 - **UserDefaults** — 本地快取與帳號記憶
@@ -54,19 +52,18 @@
 
 ## 🚀 安裝
 
-### 從 Xcode 建置
+### 從 Flutter 建置
 
 1. Clone 此 repo
 
 ```bash
-git clone https://github.com/HansHans135/VocPass.git
+git clone https://github.com/VocPass/android
 ```
 
-2. 以 Xcode 開啟 `VocPass.xcodeproj`
+2. 以 VScode 開啟 `android` 資料夾
 3. 選擇目標裝置並執行（⌘ + R）
 
-> 需 Xcode 15+ 及 Apple Developer 帳號（免費帳號限安裝於個人裝置）
-
+> 需 Flutter 3.32.1+ 及 Dart 3.8.1
 ---
 
 ## 🤝 貢獻
