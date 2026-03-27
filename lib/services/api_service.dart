@@ -11,6 +11,7 @@ import '../models/models.dart';
 import 'cache_service.dart';
 import 'html_parser.dart';
 import 'school_config_manager.dart';
+import 'vocpass_auth_service.dart';
 
 class AppCookie {
   final String name;
@@ -510,6 +511,282 @@ class ApiService extends ChangeNotifier {
 
     result.sort((a, b) => b.percentage.compareTo(a.percentage));
     return result;
+  }
+
+  Future<List<NoticeItem>> fetchNotices() async {
+    final school = _selectedSchool();
+    final noticeConfig = school.notice;
+    if (noticeConfig == null) {
+      throw ApiException(ApiErrorType.featureNotSupported, '此功能尚未支援');
+    }
+
+    final uri = Uri.parse(
+      '${AppConfig.vocPassApiHost}/api/${noticeConfig.vision}/notice',
+    ).replace(queryParameters: {'school_name': school.name});
+
+    final headers = <String, String>{'Accept': 'application/json'};
+    if (cookieString.isNotEmpty) headers['Cookie'] = cookieString;
+
+    final response = await http.get(uri, headers: headers);
+    if (response.statusCode == 404) {
+      throw ApiException(ApiErrorType.featureNotSupported, '此功能尚未支援');
+    }
+    if (response.statusCode != 200) {
+      throw ApiException(ApiErrorType.invalidResponseFormat, '伺服器回應錯誤');
+    }
+
+    final json = jsonDecode(response.body);
+    final data = json is Map ? (json['data'] ?? json) : json;
+    if (data is! List) {
+      throw ApiException(ApiErrorType.invalidResponseFormat, '公告資料格式錯誤');
+    }
+    return data
+        .whereType<Map>()
+        .map((e) => NoticeItem.fromJson(e.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<TimetableData> fetchSharedCurriculum(String username) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/api/curriculum/$username');
+    final headers = <String, String>{'Accept': 'application/json'};
+    VocPassAuthService.instance.applyAuthHeader(headers);
+
+    final response = await http.get(uri, headers: headers);
+    if (response.statusCode == 404) {
+      throw ApiException(ApiErrorType.invalidResponseFormat, '未找到用戶或用戶未分享');
+    }
+    if (response.statusCode != 200) {
+      throw ApiException(ApiErrorType.invalidResponseFormat, '伺服器回應錯誤');
+    }
+
+    final json = jsonDecode(response.body);
+    if (json is! Map) {
+      throw ApiException(ApiErrorType.invalidResponseFormat, '課表資料格式錯誤');
+    }
+
+    final curriculum = json.map((key, value) => MapEntry(
+          key.toString(),
+          CourseInfo.fromJson((value as Map).cast<String, dynamic>()),
+        ));
+
+    final entries = <TimetableEntry>[];
+    for (final entry in curriculum.entries) {
+      for (final schedule in entry.value.schedule) {
+        entries.add(TimetableEntry(
+          weekday: schedule.weekday,
+          period: schedule.period,
+          subject: entry.key,
+        ));
+      }
+    }
+
+    return TimetableData(
+      entries: entries,
+      periodTimes: const {},
+      curriculum: curriculum,
+    );
+  }
+
+  Future<void> setCurriculumSharing(bool share) async {
+    final cachedTimetable = CacheService.instance.getCachedTimetable();
+    final body = cachedTimetable != null
+        ? cachedTimetable.curriculum.map((key, value) => MapEntry(key, {
+              'count': value.count,
+              'schedule': value.schedule
+                  .map((e) => {'weekday': e.weekday, 'period': e.period})
+                  .toList(),
+            }))
+        : <String, dynamic>{};
+
+    final shareValue = share ? 1 : 0;
+    final uri = Uri.parse(
+        '${AppConfig.vocPassApiHost}/api/share_curriculum?share_status=$shareValue');
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    VocPassAuthService.instance.applyAuthHeader(headers);
+
+    final response = await http.post(uri,
+        headers: headers, body: jsonEncode(body));
+    if (response.statusCode != 200) {
+      throw ApiException(ApiErrorType.invalidResponseFormat, '設定失敗');
+    }
+    CacheService.instance.isCurriculumSharing = share;
+  }
+
+  // MARK: - 餐廳
+
+  Future<List<Restaurant>> fetchRestaurants(String school) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/restaurant/')
+        .replace(queryParameters: {'school': school});
+    final response = await http.get(uri, headers: {'Accept': 'application/json'});
+    if (response.statusCode != 200) {
+      throw ApiException(ApiErrorType.invalidResponseFormat, '伺服器回應錯誤');
+    }
+    final json = jsonDecode(response.body);
+    final items = json['items'] as List? ?? [];
+    return items
+        .whereType<Map>()
+        .map((e) => Restaurant.fromJson(e.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<List<RestaurantEvaluation>> fetchRestaurantEvaluations(String id) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/restaurant/evaluate/$id')
+        .replace(queryParameters: {'per_page': '50'});
+    final response = await http.get(uri, headers: {'Accept': 'application/json'});
+    if (response.statusCode != 200) {
+      throw ApiException(ApiErrorType.invalidResponseFormat, '伺服器回應錯誤');
+    }
+    final json = jsonDecode(response.body);
+    final items = json['items'] as List? ?? [];
+    return items
+        .whereType<Map>()
+        .map((e) => RestaurantEvaluation.fromJson(e.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<String> createRestaurant({
+    required String school,
+    required String name,
+    required double lat,
+    required double lon,
+    String? address,
+  }) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/restaurant/');
+    final body = <String, dynamic>{
+      'school': school,
+      'name': name,
+      'map': {'lon': lon, 'lat': lat},
+    };
+    if (address != null && address.isNotEmpty) body['address'] = address;
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    VocPassAuthService.instance.applyAuthHeader(headers);
+
+    final response = await http.post(uri, headers: headers, body: jsonEncode(body));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final msg = _extractErrorMessage(response.body) ?? '新增失敗';
+      throw ApiException(ApiErrorType.invalidResponseFormat, msg);
+    }
+    final json = jsonDecode(response.body);
+    return (json is Map ? json['id']?.toString() : null) ?? '';
+  }
+
+  Future<void> createEvaluation({
+    required String restaurantID,
+    required String title,
+    required String description,
+    required int score,
+  }) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/restaurant/evaluate');
+    final body = {
+      'restaurant': restaurantID,
+      'title': title,
+      'description': description,
+      'score': score,
+    };
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    VocPassAuthService.instance.applyAuthHeader(headers);
+
+    final response = await http.post(uri, headers: headers, body: jsonEncode(body));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final msg = _extractErrorMessage(response.body) ?? '送出失敗';
+      throw ApiException(ApiErrorType.invalidResponseFormat, msg);
+    }
+  }
+
+  Future<void> deleteRestaurant(String id) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/restaurant/$id');
+    final headers = <String, String>{'Accept': 'application/json'};
+    VocPassAuthService.instance.applyAuthHeader(headers);
+    final response = await http.delete(uri, headers: headers);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final msg = _extractErrorMessage(response.body) ?? '刪除失敗';
+      throw ApiException(ApiErrorType.invalidResponseFormat, msg);
+    }
+  }
+
+  Future<void> deleteEvaluation(String id) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/restaurant/evaluate/$id');
+    final headers = <String, String>{'Accept': 'application/json'};
+    VocPassAuthService.instance.applyAuthHeader(headers);
+    final response = await http.delete(uri, headers: headers);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final msg = _extractErrorMessage(response.body) ?? '刪除失敗';
+      throw ApiException(ApiErrorType.invalidResponseFormat, msg);
+    }
+  }
+
+  Future<List<RestaurantMenu>> fetchRestaurantMenu(String id) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/restaurant/menu/$id')
+        .replace(queryParameters: {'per_page': '50'});
+    final response = await http.get(uri, headers: {'Accept': 'application/json'});
+    if (response.statusCode != 200) {
+      throw ApiException(ApiErrorType.invalidResponseFormat, '伺服器回應錯誤');
+    }
+    final json = jsonDecode(response.body);
+    final items = json['items'] as List? ?? [];
+    return items
+        .whereType<Map>()
+        .map((e) => RestaurantMenu.fromJson(e.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<void> deleteRestaurantMenu(String id) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/restaurant/menu/$id');
+    final headers = <String, String>{'Accept': 'application/json'};
+    VocPassAuthService.instance.applyAuthHeader(headers);
+    final response = await http.delete(uri, headers: headers);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final msg = _extractErrorMessage(response.body) ?? '刪除失敗';
+      throw ApiException(ApiErrorType.invalidResponseFormat, msg);
+    }
+  }
+
+  Future<void> reportContent({
+    String? restaurantID,
+    String? restaurantEvaluateID,
+    String? restaurantMenuID,
+    required String reason,
+    String? description,
+  }) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/api/report');
+    final body = <String, dynamic>{'reason': reason};
+    if (restaurantID != null) body['restaurant_id'] = restaurantID;
+    if (restaurantEvaluateID != null) body['restaurant_evaluate_id'] = restaurantEvaluateID;
+    if (restaurantMenuID != null) body['restaurant_menu_id'] = restaurantMenuID;
+    if (description != null && description.trim().isNotEmpty) {
+      body['description'] = description.trim();
+    }
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    VocPassAuthService.instance.applyAuthHeader(headers);
+    final response = await http.post(uri, headers: headers, body: jsonEncode(body));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final msg = _extractErrorMessage(response.body) ?? '檢舉失敗';
+      throw ApiException(ApiErrorType.invalidResponseFormat, msg);
+    }
+  }
+
+  String? _extractErrorMessage(String body) {
+    try {
+      final json = jsonDecode(body);
+      if (json is Map<String, dynamic>) {
+        return json['message']?.toString() ?? json['msg']?.toString();
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<String> _requestHtml(String url) async {

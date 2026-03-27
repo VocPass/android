@@ -217,6 +217,102 @@ class CacheService extends ChangeNotifier {
     prefs.remove('cached_exam_menu_timestamp');
   }
 
+  bool get isCurriculumSharing =>
+      prefs.getBool('is_curriculum_sharing') ?? false;
+
+  set isCurriculumSharing(bool value) {
+    prefs.setBool('is_curriculum_sharing', value);
+    notifyListeners();
+  }
+
+  List<String> get followedUsernames {
+    return prefs.getStringList('followed_usernames') ?? [];
+  }
+
+  set followedUsernames(List<String> value) {
+    prefs.setStringList('followed_usernames', value);
+    notifyListeners();
+  }
+
+  // 每天節數
+  int get periodsPerDay => prefs.getInt('periods_per_day') ?? 7;
+
+  set periodsPerDay(int value) {
+    prefs.setInt('periods_per_day', value);
+    notifyListeners();
+  }
+
+  // 每學期週數
+  int get weeksPerSemester => prefs.getInt('weeks_per_semester') ?? 18;
+
+  set weeksPerSemester(int value) {
+    prefs.setInt('weeks_per_semester', value);
+    notifyListeners();
+  }
+
+  // 手動課表覆寫 (key = "weekday|period", value = subject)
+  Map<String, String> get manualCurriculum {
+    final raw = prefs.getString('manual_curriculum');
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.map((k, v) => MapEntry(k, v.toString()));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  set manualCurriculum(Map<String, String> value) {
+    prefs.setString('manual_curriculum', jsonEncode(value));
+    notifyListeners();
+  }
+
+  // 手動教室/教師覆寫
+  Map<String, CourseExtra> get manualRoomTeacher {
+    final raw = prefs.getString('manual_room_teacher');
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.map((k, v) => MapEntry(
+            k,
+            CourseExtra.fromJson((v as Map).cast<String, dynamic>()),
+          ));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  set manualRoomTeacher(Map<String, CourseExtra> value) {
+    prefs.setString(
+        'manual_room_teacher',
+        jsonEncode(
+            value.map((k, v) => MapEntry(k, v.toJson()))));
+    notifyListeners();
+  }
+
+  // 手動節次時間覆寫
+  Map<String, PeriodTime> get manualPeriodTimes {
+    final raw = prefs.getString('manual_period_times');
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.map((k, v) => MapEntry(
+            k,
+            PeriodTime.fromMap((v as Map).cast<String, dynamic>()),
+          ));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  set manualPeriodTimes(Map<String, PeriodTime> value) {
+    prefs.setString(
+        'manual_period_times',
+        jsonEncode(
+            value.map((k, v) => MapEntry(k, v.toJson()))));
+    notifyListeners();
+  }
+
   void clearAllCache() {
     clearCurriculumCache();
     clearTimetableCache();

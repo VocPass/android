@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  app_links
   charset_converter
   flutter_inappwebview_windows
   url_launcher_windows

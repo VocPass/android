@@ -1,5 +1,19 @@
 import 'dart:convert';
 
+class NoticeConfig {
+  final String vision;
+  final String? url;
+
+  const NoticeConfig({required this.vision, this.url});
+
+  factory NoticeConfig.fromJson(Map<String, dynamic> json) {
+    return NoticeConfig(
+      vision: json['vision']?.toString() ?? '',
+      url: json['url']?.toString(),
+    );
+  }
+}
+
 class SchoolConfig {
   final String name;
   final String vision;
@@ -9,6 +23,8 @@ class SchoolConfig {
   final UrlConfig url;
   final LoginConfig login;
   final RouteConfig route;
+  final NoticeConfig? notice;
+  final String? telephone;
 
   const SchoolConfig({
     required this.name,
@@ -19,6 +35,8 @@ class SchoolConfig {
     required this.url,
     required this.login,
     required this.route,
+    this.notice,
+    this.telephone,
   });
 
   Uri? get loginUrl {
@@ -43,6 +61,7 @@ class SchoolConfig {
   }
 
   static SchoolConfig fromJson(Map<String, dynamic> json) {
+    final noticeRaw = json['notice'] as Map?;
     return SchoolConfig(
       name: json['name']?.toString() ?? '',
       vision: json['vision']?.toString() ?? '',
@@ -50,14 +69,15 @@ class SchoolConfig {
       beta: json['beta'] == true,
       api: json['api']?.toString() ?? '',
       url: UrlConfig.fromJson((json['url'] as Map?)?.cast<String, dynamic>() ?? {}),
-      login:
-          LoginConfig.fromJson((json['login'] as Map?)?.cast<String, dynamic>() ?? {}),
-      route:
-          RouteConfig.fromJson((json['route'] as Map?)?.cast<String, dynamic>() ?? {}),
+      login: LoginConfig.fromJson((json['login'] as Map?)?.cast<String, dynamic>() ?? {}),
+      route: RouteConfig.fromJson((json['route'] as Map?)?.cast<String, dynamic>() ?? {}),
+      notice: noticeRaw != null ? NoticeConfig.fromJson(noticeRaw.cast<String, dynamic>()) : null,
+      telephone: json['telephone']?.toString(),
     );
   }
 
   static SchoolConfig fromApi(String name, Map<String, dynamic> json) {
+    final noticeRaw = json['notice'] as Map?;
     return SchoolConfig(
       name: name,
       vision: json['vision']?.toString() ?? '',
@@ -65,10 +85,10 @@ class SchoolConfig {
       beta: json['beta'] == true,
       api: json['api']?.toString() ?? '',
       url: UrlConfig.fromJson((json['url'] as Map?)?.cast<String, dynamic>() ?? {}),
-      login:
-          LoginConfig.fromJson((json['login'] as Map?)?.cast<String, dynamic>() ?? {}),
-      route:
-          RouteConfig.fromJson((json['route'] as Map?)?.cast<String, dynamic>() ?? {}),
+      login: LoginConfig.fromJson((json['login'] as Map?)?.cast<String, dynamic>() ?? {}),
+      route: RouteConfig.fromJson((json['route'] as Map?)?.cast<String, dynamic>() ?? {}),
+      notice: noticeRaw != null ? NoticeConfig.fromJson(noticeRaw.cast<String, dynamic>()) : null,
+      telephone: json['telephone']?.toString(),
     );
   }
 

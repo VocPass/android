@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'attendance_screen.dart';
-import 'curriculum_screen.dart';
-import 'home_screen.dart';
-import 'score_screen.dart';
+import 'home_page_screen.dart';
+import 'school_affairs_screen.dart';
 import 'settings_screen.dart';
 
 class MainTabScreen extends StatefulWidget {
@@ -17,10 +15,8 @@ class _MainTabScreenState extends State<MainTabScreen> {
   int _currentIndex = 0;
 
   final _pages = const [
-    HomeScreen(),
-    CurriculumScreen(),
-    AttendanceScreen(),
-    ScoreScreen(),
+    HomePageScreen(),
+    SchoolAffairsScreen(),
     SettingsScreen(),
   ];
 
@@ -38,23 +34,18 @@ class _MainTabScreenState extends State<MainTabScreen> {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.star),
-            label: '獎懲',
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: '首頁',
           ),
           NavigationDestination(
-            icon: Icon(Icons.calendar_month),
-            label: '課表',
+            icon: Icon(Icons.account_balance_outlined),
+            selectedIcon: Icon(Icons.account_balance),
+            label: '校務',
           ),
           NavigationDestination(
-            icon: Icon(Icons.event_busy),
-            label: '缺曠',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart),
-            label: '成績',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings),
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
             label: '設定',
           ),
         ],

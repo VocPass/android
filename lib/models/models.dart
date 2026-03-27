@@ -727,11 +727,32 @@ class SemesterInfo {
   SemesterInfo({required this.schoolYear, required this.semester});
 }
 
+class CourseExtra {
+  String room;
+  String teacher;
+
+  CourseExtra({this.room = '', this.teacher = ''});
+
+  Map<String, dynamic> toJson() => {'room': room, 'teacher': teacher};
+
+  factory CourseExtra.fromJson(Map<String, dynamic> json) => CourseExtra(
+        room: json['room']?.toString() ?? '',
+        teacher: json['teacher']?.toString() ?? '',
+      );
+}
+
 class PeriodTime {
   final String startTime;
   final String endTime;
 
   PeriodTime({required this.startTime, required this.endTime});
+
+  Map<String, dynamic> toJson() => {'startTime': startTime, 'endTime': endTime};
+
+  factory PeriodTime.fromMap(Map<String, dynamic> json) => PeriodTime(
+        startTime: json['startTime']?.toString() ?? '',
+        endTime: json['endTime']?.toString() ?? '',
+      );
 }
 
 class TimetableEntry {
@@ -864,6 +885,204 @@ class SubjectAbsence {
       total: total,
       totalClasses: totalClasses,
       percentage: percentage,
+    );
+  }
+}
+
+class NoticeItem {
+  final String link;
+  final String title;
+  final String publisher;
+  final String date;
+  final String views;
+
+  NoticeItem({
+    required this.link,
+    required this.title,
+    required this.publisher,
+    required this.date,
+    required this.views,
+  });
+
+  factory NoticeItem.fromJson(Map<String, dynamic> json) {
+    return NoticeItem(
+      link: JsonUtils.readString(json, ['link', 'url', 'href']),
+      title: JsonUtils.readString(json, ['title', 'subject']),
+      publisher: JsonUtils.readString(json, ['publisher', 'author', 'department']),
+      date: JsonUtils.readString(json, ['date', 'publish_date', 'created_at']),
+      views: JsonUtils.readString(json, ['views', 'view_count', 'hits'],
+          defaultValue: JsonUtils.readInt(json, ['views', 'view_count', 'hits']).toString()),
+    );
+  }
+}
+
+class VocPassUser {
+  final String id;
+  final String name;
+  final String username;
+  final String email;
+  final String? avatar;
+  final bool emailVisibility;
+  final bool verified;
+  final bool? shareStatus;
+
+  VocPassUser({
+    required this.id,
+    required this.name,
+    required this.username,
+    required this.email,
+    required this.avatar,
+    required this.emailVisibility,
+    required this.verified,
+    required this.shareStatus,
+  });
+
+  String? get avatarURL => (avatar != null && avatar!.isNotEmpty) ? avatar : null;
+  String get displayName => name.isEmpty ? username : name;
+
+  factory VocPassUser.fromJson(Map<String, dynamic> json) {
+    return VocPassUser(
+      id: JsonUtils.readString(json, ['id']),
+      name: JsonUtils.readString(json, ['name']),
+      username: JsonUtils.readString(json, ['username']),
+      email: JsonUtils.readString(json, ['email']),
+      avatar: json['avatar']?.toString(),
+      emailVisibility: JsonUtils.readBool(json, ['email_visibility', 'emailVisibility']),
+      verified: JsonUtils.readBool(json, ['verified']),
+      shareStatus: json.containsKey('share_status') || json.containsKey('shareStatus')
+          ? JsonUtils.readBool(json, ['share_status', 'shareStatus'])
+          : null,
+    );
+  }
+}
+
+class VocPassPublicUser {
+  final String id;
+  final String name;
+  final String username;
+  final String? avatar;
+
+  VocPassPublicUser({
+    required this.id,
+    required this.name,
+    required this.username,
+    required this.avatar,
+  });
+
+  String? get avatarURL => (avatar != null && avatar!.isNotEmpty) ? avatar : null;
+  String get displayName => name.isEmpty ? username : name;
+
+  factory VocPassPublicUser.fromJson(Map<String, dynamic> json) {
+    return VocPassPublicUser(
+      id: JsonUtils.readString(json, ['id']),
+      name: JsonUtils.readString(json, ['name']),
+      username: JsonUtils.readString(json, ['username']),
+      avatar: json['avatar']?.toString(),
+    );
+  }
+}
+
+// MARK: - 餐廳
+
+class RestaurantMap {
+  final double lon;
+  final double lat;
+
+  RestaurantMap({required this.lon, required this.lat});
+
+  factory RestaurantMap.fromJson(Map<String, dynamic> json) => RestaurantMap(
+        lon: (json['lon'] as num?)?.toDouble() ?? 0,
+        lat: (json['lat'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class Restaurant {
+  final String id;
+  final String name;
+  final String school;
+  final String icon;
+  final RestaurantMap? map;
+  final String? user;
+  final String? address;
+
+  Restaurant({
+    required this.id,
+    required this.name,
+    required this.school,
+    required this.icon,
+    this.map,
+    this.user,
+    this.address,
+  });
+
+  String? get iconURL => icon.isNotEmpty ? icon : null;
+
+  factory Restaurant.fromJson(Map<String, dynamic> json) {
+    return Restaurant(
+      id: JsonUtils.readString(json, ['id']),
+      name: JsonUtils.readString(json, ['name']),
+      school: JsonUtils.readString(json, ['school']),
+      icon: JsonUtils.readString(json, ['icon']),
+      map: json['map'] is Map
+          ? RestaurantMap.fromJson((json['map'] as Map).cast<String, dynamic>())
+          : null,
+      user: json['user']?.toString(),
+      address: json['address']?.toString(),
+    );
+  }
+}
+
+class RestaurantEvaluation {
+  final String id;
+  final String title;
+  final String description;
+  final int score;
+  final String user;
+
+  RestaurantEvaluation({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.score,
+    required this.user,
+  });
+
+  String get plainDescription => description
+      .replaceAll(RegExp(r'<[^>]+>'), '')
+      .trim();
+
+  factory RestaurantEvaluation.fromJson(Map<String, dynamic> json) {
+    return RestaurantEvaluation(
+      id: JsonUtils.readString(json, ['id']),
+      title: JsonUtils.readString(json, ['title']),
+      description: JsonUtils.readString(json, ['description']),
+      score: JsonUtils.readInt(json, ['score']),
+      user: JsonUtils.readString(json, ['user']),
+    );
+  }
+}
+
+class RestaurantMenu {
+  final String id;
+  final String menu;
+  final String restaurant;
+  final String user;
+
+  RestaurantMenu({
+    required this.id,
+    required this.menu,
+    required this.restaurant,
+    required this.user,
+  });
+
+  String? get menuURL => menu.isNotEmpty ? menu : null;
+
+  factory RestaurantMenu.fromJson(Map<String, dynamic> json) {
+    return RestaurantMenu(
+      id: JsonUtils.readString(json, ['id']),
+      menu: JsonUtils.readString(json, ['menu']),
+      restaurant: JsonUtils.readString(json, ['restaurant']),
+      user: JsonUtils.readString(json, ['uesr', 'user']),
     );
   }
 }
