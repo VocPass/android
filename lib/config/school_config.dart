@@ -25,6 +25,7 @@ class SchoolConfig {
   final RouteConfig route;
   final NoticeConfig? notice;
   final String? telephone;
+  final String? js;
 
   const SchoolConfig({
     required this.name,
@@ -37,6 +38,7 @@ class SchoolConfig {
     required this.route,
     this.notice,
     this.telephone,
+    this.js,
   });
 
   Uri? get loginUrl {
@@ -73,6 +75,7 @@ class SchoolConfig {
       route: RouteConfig.fromJson((json['route'] as Map?)?.cast<String, dynamic>() ?? {}),
       notice: noticeRaw != null ? NoticeConfig.fromJson(noticeRaw.cast<String, dynamic>()) : null,
       telephone: json['telephone']?.toString(),
+      js: json['js']?.toString(),
     );
   }
 
@@ -89,6 +92,7 @@ class SchoolConfig {
       route: RouteConfig.fromJson((json['route'] as Map?)?.cast<String, dynamic>() ?? {}),
       notice: noticeRaw != null ? NoticeConfig.fromJson(noticeRaw.cast<String, dynamic>()) : null,
       telephone: json['telephone']?.toString(),
+      js: json['js']?.toString(),
     );
   }
 

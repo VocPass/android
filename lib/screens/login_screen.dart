@@ -31,7 +31,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isCaptchaRecognizing = false;
   String? _lastCaptcha;
   bool _hasLoggedIn = false;
-  int _inspectAttempt = 0;
+  bool _isCheckingLoginState = false;
+  int? _lastContentHash;
+  final List<String> _visitedUrls = [];
 
   List<String> get _loginKeywords {
     final fromApi = widget.school.login.successKeywords
@@ -40,6 +42,11 @@ class _LoginScreenState extends State<LoginScreen> {
         [];
     if (fromApi.isNotEmpty) return fromApi;
     return const ['登出', 'logout'];
+  }
+
+  void _recordUrl(String url) {
+    if (url.isEmpty || _visitedUrls.contains(url)) return;
+    _visitedUrls.add(url);
   }
 
   @override
@@ -68,6 +75,11 @@ class _LoginScreenState extends State<LoginScreen> {
               mediaPlaybackRequiresUserGesture: false,
             ),
             initialUserScripts: UnmodifiableListView([
+              UserScript(
+                source: _buildUrlTrackingScript(),
+                injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                forMainFrameOnly: false,
+              ),
               UserScript(
                 source: _buildInjectedScript(cache),
                 injectionTime: UserScriptInjectionTime.AT_DOCUMENT_END,
@@ -107,6 +119,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   await _recognizeCaptcha(selector);
                 },
               );
+              controller.addJavaScriptHandler(
+                handlerName: 'urlTracking',
+                callback: (args) {
+                  if (args.isEmpty) return;
+                  final url = args.first?.toString() ?? '';
+                  if (url.isNotEmpty) _recordUrl(url);
+                },
+              );
             },
             onLoadStart: (controller, url) {
               final currentUrl = url?.toString().toLowerCase() ?? '';
@@ -114,9 +134,12 @@ class _LoginScreenState extends State<LoginScreen> {
               if (!currentUrl.contains(loginPath) && !_hasLoggedIn) {
                 setState(() => _isLoggingIn = true);
               }
+              if (url != null) _recordUrl(url.toString());
             },
             onLoadStop: (controller, url) {
-              _inspectLoginState(url?.toString() ?? '');
+              if (url != null) _recordUrl(url.toString());
+              _injectCustomJsIfNeeded();
+              _startContinuousDetection(url?.toString() ?? '');
             },
             onLoadError: (_, __, ___, ____) {
               setState(() => _isLoggingIn = false);
@@ -151,6 +174,35 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  String _buildUrlTrackingScript() {
+    return '''
+(function() {
+  function trackURL(url) {
+    if (!url || typeof url !== 'string') return;
+    try {
+      var absolute = new URL(url, window.location.href).href;
+      window.flutter_inappwebview.callHandler('urlTracking', absolute);
+    } catch(e) {
+      window.flutter_inappwebview.callHandler('urlTracking', url);
+    }
+  }
+
+  var originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    var url = (typeof input === 'string') ? input : (input && input.url) ? input.url : String(input);
+    trackURL(url);
+    return originalFetch.apply(this, arguments);
+  };
+
+  var originalOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url) {
+    trackURL(String(url));
+    return originalOpen.apply(this, arguments);
+  };
+})();
+''';
+  }
+
   String _buildInjectedScript(CacheService cache) {
     final username = _escapeJs(cache.savedUsername ?? '');
     final password = _escapeJs(cache.savedPassword ?? '');
@@ -174,26 +226,57 @@ class _LoginScreenState extends State<LoginScreen> {
   var captchaImageSelector = '$captchaSelector';
   var hasTriggeredCaptchaRecognition = false;
 
+  function getNativeValueSetter(element) {
+    var prototype = Object.getPrototypeOf(element);
+    var descriptor = prototype ? Object.getOwnPropertyDescriptor(prototype, 'value') : null;
+    return descriptor && descriptor.set ? descriptor.set : null;
+  }
+
+  function dispatchFieldEvents(field, previousValue) {
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    if (previousValue !== field.value) {
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    field.dispatchEvent(new Event('blur', { bubbles: true }));
+  }
+
+  function fillField(field, newValue) {
+    if (!field || !newValue) return false;
+    var oldValue = field.value || '';
+    field.focus();
+    var setter = getNativeValueSetter(field);
+    if (setter) {
+      setter.call(field, '');
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      setter.call(field, newValue);
+    } else {
+      field.value = '';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.value = newValue;
+    }
+    dispatchFieldEvents(field, oldValue);
+    return true;
+  }
+
   function fillCredentials() {
-    var usernameField = document.querySelector('input[name="' + usernameFieldName + '"]');
-    if (usernameField && savedUsername && !usernameField.value) {
-      usernameField.value = savedUsername;
-      usernameField.dispatchEvent(new Event('input', { bubbles: true }));
-      usernameField.dispatchEvent(new Event('change', { bubbles: true }));
+    var usernameEl = document.querySelector('input[name="' + usernameFieldName + '"]') ||
+                     document.querySelector('input[id="' + usernameFieldName + '"]');
+    if (usernameEl && savedUsername && !usernameEl.value) {
+      fillField(usernameEl, savedUsername);
     }
 
-    var passwordField = document.querySelector('input[name="' + passwordFieldName + '"]');
-    if (passwordField && savedPassword && !passwordField.value) {
-      passwordField.value = savedPassword;
-      passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-      passwordField.dispatchEvent(new Event('change', { bubbles: true }));
+    var passwordEl = document.querySelector('input[name="' + passwordFieldName + '"]') ||
+                     document.querySelector('input[id="' + passwordFieldName + '"]');
+    if (passwordEl && savedPassword && !passwordEl.value) {
+      fillField(passwordEl, savedPassword);
     }
 
-    var captchaField = captchaFieldName
-      ? document.querySelector('input[name="' + captchaFieldName + '"]')
+    var captchaEl = captchaFieldName
+      ? (document.querySelector('input[name="' + captchaFieldName + '"]') ||
+         document.querySelector('input[id="' + captchaFieldName + '"]'))
       : null;
 
-    if (captchaField && !captchaField.value && !hasTriggeredCaptchaRecognition) {
+    if (captchaEl && !captchaEl.value && !hasTriggeredCaptchaRecognition) {
       var captchaImage = document.querySelector('.' + captchaImageSelector) ||
         document.querySelector('#' + captchaImageSelector) ||
         document.querySelector('[name="' + captchaImageSelector + '"]') ||
@@ -213,13 +296,12 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   window.fillCaptchaCode = function(code) {
-    var captchaField = captchaFieldName
-      ? document.querySelector('input[name="' + captchaFieldName + '"]')
+    var captchaEl = captchaFieldName
+      ? (document.querySelector('input[name="' + captchaFieldName + '"]') ||
+         document.querySelector('input[id="' + captchaFieldName + '"]'))
       : null;
-    if (captchaField) {
-      captchaField.value = code;
-      captchaField.dispatchEvent(new Event('input', { bubbles: true }));
-      captchaField.dispatchEvent(new Event('change', { bubbles: true }));
+    if (captchaEl) {
+      fillField(captchaEl, code);
       return true;
     }
     return false;
@@ -247,10 +329,13 @@ document.addEventListener('click', function(e) {
     : (target.matches('button, input[type="submit"]') || target.closest('button, input[type="submit"]'));
 
   if (isLoginButton) {
-    var usernameField = document.querySelector('input[name="' + usernameFieldName + '"]');
-    var passwordField = document.querySelector('input[name="' + passwordFieldName + '"]');
+    var usernameField = document.querySelector('input[name="' + usernameFieldName + '"]') ||
+                        document.querySelector('input[id="' + usernameFieldName + '"]');
+    var passwordField = document.querySelector('input[name="' + passwordFieldName + '"]') ||
+                        document.querySelector('input[id="' + passwordFieldName + '"]');
     var captchaField = captchaFieldName
-      ? document.querySelector('input[name="' + captchaFieldName + '"]')
+      ? (document.querySelector('input[name="' + captchaFieldName + '"]') ||
+         document.querySelector('input[id="' + captchaFieldName + '"]'))
       : null;
 
     var username = usernameField ? usernameField.value : '';
@@ -279,18 +364,23 @@ document.addEventListener('submit', function(e) {
   var passwordFieldName = '$passwordField';
   var captchaFieldName = '$captchaField';
 
-  var loginBtn = form.querySelector('.' + buttonClass);
+  var loginBtn = buttonClass ? form.querySelector('.' + buttonClass) : form.querySelector('button[type="submit"], input[type="submit"]');
   if (!loginBtn) return;
 
-  var usernameField = form.querySelector('input[name="' + usernameFieldName + '"]');
-  var passwordField = form.querySelector('input[name="' + passwordFieldName + '"]');
-  var captchaField = form.querySelector('input[name="' + captchaFieldName + '"]');
+  var usernameField = form.querySelector('input[name="' + usernameFieldName + '"]') ||
+                      form.querySelector('input[id="' + usernameFieldName + '"]');
+  var passwordField = form.querySelector('input[name="' + passwordFieldName + '"]') ||
+                      form.querySelector('input[id="' + passwordFieldName + '"]');
+  var captchaField = captchaFieldName
+    ? (form.querySelector('input[name="' + captchaFieldName + '"]') ||
+       form.querySelector('input[id="' + captchaFieldName + '"]'))
+    : null;
 
   var username = usernameField ? usernameField.value : '';
   var password = passwordField ? passwordField.value : '';
   var captcha = captchaField ? captchaField.value : '';
 
-  if (!captcha || captcha.trim() === '') {
+  if (captchaField && (!captcha || captcha.trim() === '')) {
     return;
   }
 
@@ -306,9 +396,57 @@ document.addEventListener('submit', function(e) {
 ''';
   }
 
-  Future<void> _inspectLoginState(String currentUrl) async {
-    if (_controller == null || _hasLoggedIn) return;
-    if (_inspectAttempt > 8) return;
+  void _injectCustomJsIfNeeded() {
+    if (_hasLoggedIn) return;
+    final customJs = widget.school.js;
+    if (customJs == null || customJs.isEmpty) return;
+
+    final wrapped = '''
+(function() {
+  try {
+    if (sessionStorage.getItem('__vocpassCustomJsRan') === '1') return 'session_already';
+  } catch (_) {}
+  if (window.__vocpassCustomJsRan) return 'window_already';
+  var __vp_tries = 0;
+  var __vp_maxTries = 60;
+  function __vp_markDone() {
+    window.__vocpassCustomJsRan = true;
+    try { sessionStorage.setItem('__vocpassCustomJsRan', '1'); } catch (_) {}
+  }
+  function __vp_run() {
+    try {
+      (function() { $customJs })();
+      __vp_markDone();
+      return 'ok';
+    } catch (err) {
+      __vp_tries++;
+      if (__vp_tries < __vp_maxTries) {
+        setTimeout(__vp_run, 250);
+        return 'retry:' + err.message;
+      }
+      return 'giveup:' + err.message;
+    }
+  }
+  return __vp_run();
+})();
+''';
+
+    _controller?.evaluateJavascript(source: wrapped);
+  }
+
+  void _startContinuousDetection(String currentUrl) {
+    if (_isCheckingLoginState) return;
+    _isCheckingLoginState = true;
+    _inspectLoginStatePeriodic(currentUrl);
+  }
+
+  Future<void> _inspectLoginStatePeriodic(String currentUrl) async {
+    if (_controller == null || _hasLoggedIn) {
+      _isCheckingLoginState = false;
+      return;
+    }
+
+    final liveUrl = (await _controller!.getUrl())?.toString() ?? currentUrl;
 
     final result = await _controller!.evaluateJavascript(source: '''
 (function() {
@@ -320,55 +458,129 @@ document.addEventListener('submit', function(e) {
 })();
 ''');
 
+    if (!mounted) {
+      _isCheckingLoginState = false;
+      return;
+    }
+
     if (result is Map) {
       final readyState = (result['readyState'] ?? '').toString().toLowerCase();
-      if (readyState != 'complete' && _inspectAttempt < 8) {
-        _inspectAttempt += 1;
-        Future.delayed(const Duration(milliseconds: 350), () {
-          _inspectLoginState(currentUrl);
-        });
-        return;
-      }
+      final html = (result['html'] ?? '').toString();
+      final text = (result['text'] ?? '').toString();
 
-      final html = (result['html'] ?? '').toString().toLowerCase();
-      final text = (result['text'] ?? '').toString().toLowerCase();
-      final searchable = '$text\n$html';
-      final matched = _loginKeywords.firstWhere(
-        (key) => searchable.contains(key.toLowerCase()),
-        orElse: () => '',
-      );
+      final contentHash = html.hashCode ^ text.hashCode;
+      final isNewContent = _lastContentHash != contentHash;
+      _lastContentHash = contentHash;
 
-      if (matched.isNotEmpty && !_hasLoggedIn) {
-        final cookieManager = CookieManager.instance();
-        final cookies = await cookieManager.getCookies(
-          url: WebUri(widget.school.rootUrl),
+      if (isNewContent &&
+          (readyState == 'complete' || readyState == 'interactive')) {
+        final searchable =
+            '${text.toLowerCase()}\n${html.toLowerCase()}';
+        final matched = _loginKeywords.firstWhere(
+          (key) => searchable.contains(key.toLowerCase()),
+          orElse: () => '',
         );
-        final mapped = cookies
-            .map((c) => AppCookie(name: c.name, value: c.value))
-            .toList();
 
-        if (mounted) {
-          setState(() {
-            _hasLoggedIn = true;
-            _isLoggingIn = false;
-          });
+        if (matched.isNotEmpty && !_hasLoggedIn) {
+          await _handleLoginSuccess(liveUrl, html);
+          return;
         }
 
-        if (mounted) {
-          final apiService = context.read<ApiService>();
-          apiService.setCookies(mapped);
-          apiService.markLoggedIn();
-        }
-        return;
-      }
-
-      final loginPath = widget.school.url.login.toLowerCase();
-      if (currentUrl.toLowerCase().contains(loginPath)) {
-        if (mounted) {
-          setState(() => _isLoggingIn = false);
+        final loginPath = widget.school.url.login.toLowerCase();
+        if (liveUrl.toLowerCase().contains(loginPath)) {
+          if (mounted) setState(() => _isLoggingIn = false);
         }
       }
     }
+
+    if (!_hasLoggedIn) {
+      await Future.delayed(const Duration(seconds: 1));
+      _inspectLoginStatePeriodic(liveUrl);
+    } else {
+      _isCheckingLoginState = false;
+    }
+  }
+
+  Future<void> _handleLoginSuccess(String currentUrl, String html) async {
+    _hasLoggedIn = true;
+
+    final cookieManager = CookieManager.instance();
+    var cookies = await cookieManager.getCookies(
+      url: WebUri(widget.school.rootUrl),
+    );
+
+    // Extract cookies from visited URL query params
+    final extraCookies = <WebUri, Cookie>{};
+    for (final urlStr in _visitedUrls) {
+      final uri = Uri.tryParse(urlStr);
+      if (uri == null || uri.host.isEmpty) continue;
+      for (final entry in uri.queryParameters.entries) {
+        if (entry.value.isEmpty) continue;
+        if (cookies.any((c) => c.name == entry.key)) continue;
+        final webUri = WebUri('${uri.scheme}://${uri.host}');
+        extraCookies[webUri] = Cookie(
+          name: entry.key,
+          value: entry.value,
+          domain: uri.host,
+          path: '/',
+          isSecure: true,
+          expiresDate: DateTime.now()
+              .add(const Duration(days: 30))
+              .millisecondsSinceEpoch,
+        );
+      }
+    }
+    for (final entry in extraCookies.entries) {
+      await cookieManager.setCookie(
+        url: entry.key,
+        name: entry.value.name,
+        value: entry.value.value ?? '',
+        domain: entry.value.domain,
+        path: entry.value.path ?? '/',
+        isSecure: entry.value.isSecure ?? true,
+        expiresDate: entry.value.expiresDate,
+      );
+      cookies = await cookieManager.getCookies(url: WebUri(widget.school.rootUrl));
+    }
+
+    // Extract userInfo div
+    final userInfoPattern = RegExp(r'<div[^>]*id="userInfo"[^>]*>([^<]*)</div>');
+    final userInfoMatch = userInfoPattern.firstMatch(html);
+    if (userInfoMatch != null) {
+      final userInfoValue = userInfoMatch.group(1)?.trim() ?? '';
+      if (userInfoValue.isNotEmpty) {
+        final host = Uri.tryParse(currentUrl)?.host ?? '';
+        if (host.isNotEmpty && !cookies.any((c) => c.name == 'userInfo')) {
+          await cookieManager.setCookie(
+            url: WebUri('https://$host'),
+            name: 'userInfo',
+            value: userInfoValue,
+            domain: host,
+            path: '/',
+            isSecure: true,
+            expiresDate: DateTime.now()
+                .add(const Duration(days: 30))
+                .millisecondsSinceEpoch,
+          );
+          cookies = await cookieManager.getCookies(url: WebUri(widget.school.rootUrl));
+        }
+      }
+    }
+
+    final mapped = cookies
+        .map((c) => AppCookie(name: c.name, value: c.value))
+        .toList();
+
+    if (!mounted) return;
+    setState(() {
+      _hasLoggedIn = true;
+      _isLoggingIn = false;
+    });
+    _isCheckingLoginState = false;
+
+    final apiService = context.read<ApiService>();
+    apiService.setCookies(mapped);
+    apiService.markLoggedIn();
   }
 
   Future<void> _recognizeCaptcha(String selector) async {
@@ -422,15 +634,9 @@ document.addEventListener('submit', function(e) {
   try {
     var element = null;
     element = document.querySelector('.' + '$selector');
-    if (!element) {
-      element = document.querySelector('#' + '$selector');
-    }
-    if (!element) {
-      element = document.querySelector('[name="' + '$selector' + '"]');
-    }
-    if (!element) {
-      element = document.querySelector('img[alt*="' + '$selector' + '"]');
-    }
+    if (!element) element = document.querySelector('#' + '$selector');
+    if (!element) element = document.querySelector('[name="' + '$selector' + '"]');
+    if (!element) element = document.querySelector('img[alt*="' + '$selector' + '"]');
     if (!element) {
       var images = document.querySelectorAll('img');
       for (var i = 0; i < images.length; i++) {
@@ -446,9 +652,7 @@ document.addEventListener('submit', function(e) {
         }
       }
     }
-    if (!element) {
-      return { error: 'no element' };
-    }
+    if (!element) return { error: 'no element' };
     var rect = element.getBoundingClientRect();
     return {
       x: rect.left,
@@ -529,18 +733,15 @@ document.addEventListener('submit', function(e) {
   }
 
   String _cleanupText(String text) {
-    final cleaned = text
+    return text
         .trim()
         .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
         .toUpperCase();
-    return cleaned;
   }
 
   int _scoreCandidate(String candidate) {
     var score = 0;
-    if (candidate.length >= 3 && candidate.length <= 8) {
-      score += 10;
-    }
+    if (candidate.length >= 3 && candidate.length <= 8) score += 10;
     final hasDigits = candidate.contains(RegExp(r'\d'));
     final hasLetters = candidate.contains(RegExp(r'[A-Z]'));
     if (hasDigits && hasLetters) {
@@ -548,12 +749,8 @@ document.addEventListener('submit', function(e) {
     } else if (hasDigits || hasLetters) {
       score += 10;
     }
-    if (candidate.length < 2 || candidate.length > 10) {
-      score -= 20;
-    }
-    if (candidate.contains(RegExp(r'[^a-zA-Z0-9]'))) {
-      score -= 50;
-    }
+    if (candidate.length < 2 || candidate.length > 10) score -= 20;
+    if (candidate.contains(RegExp(r'[^a-zA-Z0-9]'))) score -= 50;
     return score;
   }
 
