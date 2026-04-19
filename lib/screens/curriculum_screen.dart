@@ -30,7 +30,9 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
   List<String> get _periods {
     final numericPeriods = const [
       '一', '二', '三', '四', '五', '六', '七', '八', '九', '十',
+      '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
       '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+      '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
     ];
 
     final allDataPeriods = <String>{};
@@ -44,9 +46,22 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
       if (parts.length == 2) allDataPeriods.add(parts[1]);
     }
 
+    // 計算資料中實際最高節次，顯示 max(設定值, 實際節數)
+    int maxDataPeriod = 0;
+    for (final p in allDataPeriods) {
+      final idx = numericPeriods.indexOf(p);
+      if (idx >= 0 && idx < numericPeriods.length ~/ 2) {
+        maxDataPeriod = maxDataPeriod > idx + 1 ? maxDataPeriod : idx + 1;
+      } else {
+        final n = int.tryParse(p);
+        if (n != null && n > maxDataPeriod) maxDataPeriod = n;
+      }
+    }
+    final displayCount = maxDataPeriod > _periodsPerDay ? maxDataPeriod : _periodsPerDay;
+
     final result = <String>[];
     if (allDataPeriods.contains('早讀')) result.add('早讀');
-    result.addAll(numericPeriods.take(_periodsPerDay));
+    result.addAll(numericPeriods.take(displayCount));
     return result;
   }
 
@@ -538,7 +553,7 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
           style: TextStyle(fontSize: 10, color: Colors.grey[400]),
         ),
         Text(
-          '可至「設定 › 學校設定」調整每天顯示節數（目前 $_periodsPerDay 節）',
+          '有課的節次自動顯示；可至「設定 › 課表」設定最少顯示節數（目前 $_periodsPerDay 節）',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 10, color: Colors.grey[400]),
         ),

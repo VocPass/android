@@ -168,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Text('${cache.periodsPerDay} 節'),
                       IconButton(
                         icon: const Icon(Icons.add),
-                        onPressed: cache.periodsPerDay < 12
+                        onPressed: cache.periodsPerDay < 20
                             ? () => cache.periodsPerDay = cache.periodsPerDay + 1
                             : null,
                       ),
@@ -182,7 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 4),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text('課表固定顯示的節數，即使該節無課也會顯示。預設 7 節。',
+            child: Text('最少顯示節數；若課表資料超過此數，會自動延伸顯示。預設 7 節。',
                 style: TextStyle(fontSize: 11, color: Colors.grey[500])),
           ),
 
