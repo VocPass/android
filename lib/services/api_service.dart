@@ -420,8 +420,8 @@ class ApiService extends ChangeNotifier {
     return HtmlParser.parseExamScores(html);
   }
 
-  Future<(AttendanceStatistics, List<SubjectAbsence>)>
-      fetchAttendanceWithCurriculum({String classNumber = '212'}) async {
+  Future<AttendanceResult> fetchAttendanceWithCurriculum(
+      {String classNumber = '212'}) async {
     final attendanceFuture = fetchAttendance();
     final curriculumFuture = fetchCurriculum(classNumber: classNumber);
 
@@ -433,6 +433,20 @@ class ApiService extends ChangeNotifier {
       curriculum = null;
     }
 
+    final courseMapping = <String, String>{};
+    if (curriculum != null) {
+      const numberMap = {
+        '1': '一', '2': '二', '3': '三', '4': '四',
+        '5': '五', '6': '六', '7': '七',
+      };
+      for (final entry in curriculum.entries) {
+        for (final schedule in entry.value.schedule) {
+          final chinesePeriod = numberMap[schedule.period] ?? schedule.period;
+          courseMapping['${schedule.weekday}-$chinesePeriod'] = entry.key;
+        }
+      }
+    }
+
     final subjectAbsences = curriculum == null
         ? <SubjectAbsence>[]
         : _calculateSubjectAbsences(
@@ -442,7 +456,12 @@ class ApiService extends ChangeNotifier {
             currentSemester: attendanceResult.$3?.semester,
           );
 
-    return (attendanceResult.$2, subjectAbsences);
+    return AttendanceResult(
+      records: attendanceResult.$1,
+      statistics: attendanceResult.$2,
+      subjectAbsences: subjectAbsences,
+      courseMapping: courseMapping,
+    );
   }
 
   List<SubjectAbsence> _calculateSubjectAbsences({

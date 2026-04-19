@@ -853,6 +853,20 @@ class TimetableData {
   }
 }
 
+class AttendanceResult {
+  final List<AbsenceRecord> records;
+  final AttendanceStatistics statistics;
+  final List<SubjectAbsence> subjectAbsences;
+  final Map<String, String> courseMapping;
+
+  AttendanceResult({
+    required this.records,
+    required this.statistics,
+    required this.subjectAbsences,
+    required this.courseMapping,
+  });
+}
+
 class SubjectAbsence {
   final String id;
   final String subject;
