@@ -450,10 +450,26 @@ document.addEventListener('submit', function(e) {
 
     final result = await _controller!.evaluateJavascript(source: '''
 (function() {
+  var mainHtml = (document.documentElement && document.documentElement.outerHTML) ? document.documentElement.outerHTML : '';
+  var mainText = (document.body && document.body.innerText) ? document.body.innerText : '';
+  var iframeHtml = '';
+  var iframeText = '';
+  try {
+    var frames = document.querySelectorAll('iframe, frame');
+    for (var i = 0; i < frames.length; i++) {
+      try {
+        var frameDoc = frames[i].contentDocument || frames[i].contentWindow.document;
+        if (frameDoc) {
+          iframeHtml += frameDoc.documentElement ? frameDoc.documentElement.outerHTML : '';
+          iframeText += frameDoc.body ? frameDoc.body.innerText : '';
+        }
+      } catch(e) {}
+    }
+  } catch(e) {}
   return {
     readyState: document.readyState || '',
-    html: (document.documentElement && document.documentElement.outerHTML) ? document.documentElement.outerHTML : '',
-    text: (document.body && document.body.innerText) ? document.body.innerText : ''
+    html: mainHtml + iframeHtml,
+    text: mainText + iframeText
   };
 })();
 ''');
