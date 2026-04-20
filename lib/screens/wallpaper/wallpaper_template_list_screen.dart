@@ -364,11 +364,25 @@ class _TemplateCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          Text(
-            'by ${template.author}',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          GestureDetector(
+            onTap: template.authorUrl != null
+                ? () => launchUrl(Uri.parse(template.authorUrl!),
+                    mode: LaunchMode.externalApplication)
+                : null,
+            child: Text(
+              'by ${template.author}',
+              style: TextStyle(
+                fontSize: 12,
+                color: template.authorUrl != null
+                    ? Colors.blue
+                    : Colors.grey,
+                decoration: template.authorUrl != null
+                    ? TextDecoration.underline
+                    : TextDecoration.none,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           Row(
             children: [
