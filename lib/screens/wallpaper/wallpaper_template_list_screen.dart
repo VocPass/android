@@ -264,7 +264,7 @@ class _WallpaperTemplateListScreenState
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 16,
-          childAspectRatio: 0.48,
+          childAspectRatio: 0.40,
         ),
         itemCount: _templates.length,
         itemBuilder: (context, index) {
