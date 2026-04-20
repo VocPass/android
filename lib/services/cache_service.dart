@@ -313,6 +313,27 @@ class CacheService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void saveCookies(List<Map<String, String>> cookies) {
+    prefs.setString('saved_cookies', jsonEncode(cookies));
+  }
+
+  List<Map<String, String>> loadCookies() {
+    final raw = prefs.getString('saved_cookies');
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      return (jsonDecode(raw) as List)
+          .whereType<Map>()
+          .map((e) => {'name': e['name'].toString(), 'value': e['value'].toString()})
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  void clearCookies() {
+    prefs.remove('saved_cookies');
+  }
+
   void clearAllCache() {
     clearCurriculumCache();
     clearTimetableCache();

@@ -51,6 +51,9 @@ class ApiService extends ChangeNotifier {
 
   void setCookies(List<AppCookie> value) {
     cookies = value;
+    CacheService.instance.saveCookies(
+      value.map((c) => {'name': c.name, 'value': c.value}).toList(),
+    );
     notifyListeners();
   }
 
@@ -63,7 +66,42 @@ class ApiService extends ChangeNotifier {
     cookies = [];
     isLoggedIn = false;
     CacheService.instance.clearLoginCredentials();
+    CacheService.instance.clearCookies();
     notifyListeners();
+  }
+
+  Future<bool> pingAndRestoreSession() async {
+    final savedCookies = CacheService.instance.loadCookies();
+    if (savedCookies.isEmpty) return false;
+
+    final school = SchoolConfigManager.instance.selectedSchool;
+    if (school == null) return false;
+
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/ping')
+        .replace(queryParameters: {'school_name': school.name});
+
+    final cookieStr = savedCookies.map((c) => '${c['name']}=${c['value']}').join('; ');
+
+    try {
+      final response = await http.get(uri, headers: {
+        'Cookie': cookieStr,
+        'Accept': 'application/json',
+      });
+      if (kDebugMode) print('[ApiService] Ping 回應: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        cookies = savedCookies
+            .map((c) => AppCookie(name: c['name']!, value: c['value']!))
+            .toList();
+        isLoggedIn = true;
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) print('[ApiService] Ping 失敗: $e');
+    }
+
+    CacheService.instance.clearCookies();
+    return false;
   }
 
   SchoolConfig _selectedSchool() {

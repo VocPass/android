@@ -6,6 +6,7 @@ import '../config/app_config.dart';
 import '../services/vocpass_auth_service.dart';
 import 'following_screen.dart';
 import 'restaurant_screen.dart';
+import 'w2m/w2m_list_screen.dart';
 
 /// 首頁 - 對應 iOS 的 HomePageView
 class HomePageScreen extends StatelessWidget {
@@ -89,6 +90,19 @@ class HomePageScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const FollowingListScreen()),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 出來玩
+              _HomeButton(
+                icon: Icons.calendar_month,
+                label: '出來玩',
+                color: Colors.purple,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const W2MListScreen()),
                 ),
               ),
 
