@@ -41,8 +41,30 @@ class SchoolConfig {
     this.js,
   });
 
+  static const guestApiMarker = 'vocpass://guest';
+
+  bool get isGuest => api == guestApiMarker;
+
+  static final guest = SchoolConfig(
+    name: '訪客模式',
+    vision: 'v1',
+    app: null,
+    beta: false,
+    api: guestApiMarker,
+    url: const UrlConfig(login: '/', logined: '/', root: '/'),
+    login: const LoginConfig(
+      username: FieldConfig(name: ''),
+      password: FieldConfig(name: ''),
+      captcha: FieldConfig(name: ''),
+      captchaImage: null,
+      button: ButtonConfig(cssClass: ''),
+      successKeywords: null,
+    ),
+    route: const RouteConfig(examResults: null),
+  );
+
   Uri? get loginUrl {
-    if (url.login.isEmpty) return null;
+    if (isGuest || url.login.isEmpty) return null;
     return Uri.tryParse('$api${url.login}');
   }
 

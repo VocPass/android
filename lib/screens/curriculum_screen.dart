@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/cache_service.dart';
+import '../services/school_config_manager.dart';
 import 'unsupported_screen.dart';
 
 class CurriculumScreen extends StatefulWidget {
@@ -80,7 +81,13 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
       _apiPeriodTimes = cached.periodTimes;
       _isLoading = false;
     }
-    _loadData();
+
+    final isGuest = SchoolConfigManager.instance.selectedSchool?.isGuest == true;
+    if (isGuest) {
+      _isLoading = false;
+    } else {
+      _loadData();
+    }
   }
 
   Future<void> _loadData({bool forceRefresh = false}) async {
@@ -445,10 +452,11 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
       appBar: AppBar(
         title: const Text('課表'),
         actions: [
-          IconButton(
-            onPressed: _isLoading ? null : () => _loadData(forceRefresh: true),
-            icon: const Icon(Icons.refresh),
-          ),
+          if (SchoolConfigManager.instance.selectedSchool?.isGuest != true)
+            IconButton(
+              onPressed: _isLoading ? null : () => _loadData(forceRefresh: true),
+              icon: const Icon(Icons.refresh),
+            ),
         ],
       ),
       body: _buildBody(),

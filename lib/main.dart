@@ -12,7 +12,10 @@ Future<void> main() async {
   await CacheService.instance.init();
   await SchoolConfigManager.instance.init();
   await VocPassAuthService.instance.init();
-  await VocPassAuthService.instance.restoreSession();
+  final isGuest = SchoolConfigManager.instance.selectedSchool?.isGuest == true;
+  if (!isGuest) {
+    await VocPassAuthService.instance.restoreSession();
+  }
   runApp(
     MultiProvider(
       providers: [

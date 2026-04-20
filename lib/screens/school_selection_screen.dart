@@ -147,17 +147,28 @@ class _SchoolSelectionScreenState extends State<SchoolSelectionScreen> {
       );
     }
 
-    return ListView.separated(
+    return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemBuilder: (context, index) {
-        final school = filtered[index];
-        return _SchoolRow(
-          school: school,
-          onTap: () => manager.selectSchool(school),
-        );
-      },
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemCount: filtered.length,
+      children: [
+        _SchoolRow(
+          school: SchoolConfig.guest,
+          onTap: () => manager.selectSchool(SchoolConfig.guest),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+          child: Text(
+            '訪客模式不需登入，可直接使用課表功能（手動輸入）。',
+            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+          ),
+        ),
+        ...List.generate(filtered.length * 2 - (filtered.isEmpty ? 0 : 1), (i) {
+          if (i.isOdd) return const SizedBox(height: 8);
+          return _SchoolRow(
+            school: filtered[i ~/ 2],
+            onTap: () => manager.selectSchool(filtered[i ~/ 2]),
+          );
+        }),
+      ],
     );
   }
 }
@@ -170,6 +181,8 @@ class _SchoolRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isGuest = school.isGuest;
+    final tint = isGuest ? Colors.green : Colors.blue;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
@@ -181,29 +194,26 @@ class _SchoolRow extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: Colors.blue.withOpacity(0.1),
-                child: const Icon(Icons.school, color: Colors.blue),
+                backgroundColor: tint.withOpacity(0.1),
+                child: Icon(
+                  isGuest ? Icons.person_outline : Icons.school,
+                  color: tint,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          school.name,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(width: 8),
-                        // 移除 Beta 標籤
-                      ],
+                    Text(
+                      school.name,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      school.api,
+                      isGuest ? '免登入 · 僅支援課表' : school.api,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[600],
+                            color: isGuest ? tint : Colors.grey[600],
                           ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

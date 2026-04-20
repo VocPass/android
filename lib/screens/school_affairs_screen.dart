@@ -7,6 +7,7 @@ import '../services/school_config_manager.dart';
 import 'attendance_screen.dart';
 import 'curriculum_screen.dart';
 import 'home_screen.dart';
+import 'login_screen.dart';
 import 'school_notice_screen.dart';
 import 'score_screen.dart';
 
@@ -53,6 +54,34 @@ class SchoolAffairsScreen extends StatelessWidget {
       );
     }
 
+    // 訪客模式：僅顯示課表
+    if (school.isGuest) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: _SchoolAffairsTile(
+              icon: Icons.calendar_month,
+              title: '課表',
+              enabled: true,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CurriculumScreen()),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              '訪客模式下僅可使用課表功能，課程內容可手動輸入。',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+          ),
+        ],
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -64,8 +93,15 @@ class SchoolAffairsScreen extends StatelessWidget {
               title: const Text('登入學校帳號以使用校務功能'),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey),
               onTap: () {
-                // 觸發重新登入 - 登出後 RootRouter 會自動導向 LoginScreen
-                api.logout();
+                final loginUrl = school.loginUrl;
+                if (loginUrl != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LoginScreen(school: school, targetUrl: loginUrl),
+                    ),
+                  );
+                }
               },
             ),
           ),

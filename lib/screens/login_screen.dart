@@ -12,7 +12,6 @@ import 'package:provider/provider.dart';
 import '../config/school_config.dart';
 import '../services/api_service.dart';
 import '../services/cache_service.dart';
-import '../services/school_config_manager.dart';
 import '../widgets/captcha_indicator.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -51,7 +50,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final apiService = context.read<ApiService>();
     final cache = context.read<CacheService>();
 
     return Scaffold(
@@ -59,10 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
         title: Text(widget.school.name),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            SchoolConfigManager.instance.clearSelectedSchool();
-            apiService.logout();
-          },
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Stack(
