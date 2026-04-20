@@ -49,7 +49,7 @@ jobs:
 
       - name: Build release APK
         run: |
-          flutter build apk --release
+          flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/vocpass.apk
 
       - name: Upload APK artifact
