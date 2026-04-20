@@ -310,9 +310,9 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
               final leftI = tableConfig.left * scale;
               final rightI = tableConfig.right * scale;
               final usableW = (cw - leftI - rightI).clamp(0.0, double.infinity);
-              final tableH = cw * (tableH / tableW);
+              final tblDispH = cw * (tableH / tableW);
               final cellW = usableW / 5;
-              final cellH = tableH / math.max(rows, 1);
+              final cellH = tblDispH / math.max(rows, 1);
               return math.max(8.0, math.min(cellW, cellH) * 0.32);
             }();
 
