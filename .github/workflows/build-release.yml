@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v1.4.0)，留空則不發布 Release'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -41,17 +46,21 @@ jobs:
           EOF
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release
+          mv build/app/outputs/flutter-apk/vocpass.apk build/app/outputs/flutter-apk/vocpass.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/vocpass.apk
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || inputs.tag_name != ''
         uses: softprops/action-gh-release@v2
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          files: build/app/outputs/flutter-apk/vocpass.apk
           generate_release_notes: true
+          make_latest: true

@@ -1,4 +1,4 @@
-package com.example.android
+package me.hans0805.vocpass
 
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
