@@ -84,7 +84,6 @@ class HomePageScreen extends StatelessWidget {
               const SizedBox(height: 12),
 
               // 課表產生器
-              /*
               _HomeButton(
                 icon: Icons.wallpaper,
                 label: '課表產生器',
@@ -95,7 +94,6 @@ class HomePageScreen extends StatelessWidget {
                       builder: (_) => const WallpaperTemplateListScreen()),
                 ),
               ),
-              */
 
               const SizedBox(height: 12),
 

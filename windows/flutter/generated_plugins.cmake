@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   charset_converter
+  file_selector_windows
   flutter_inappwebview_windows
   url_launcher_windows
 )

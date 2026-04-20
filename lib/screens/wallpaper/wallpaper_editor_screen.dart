@@ -1,18 +1,65 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart' show FontLoader;
 import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_config.dart';
 import '../../services/cache_service.dart';
+import '../../services/vocpass_auth_service.dart';
 import '../../models/models.dart';
 import 'wallpaper_template_list_screen.dart';
+
+// ─────────────────────── Font loader ───────────────────────
+
+class _WallpaperFontLoader {
+  static final _WallpaperFontLoader shared = _WallpaperFontLoader._();
+  _WallpaperFontLoader._();
+
+  Map<String, String> _list = {};
+  final Map<String, String> _loadedFonts = {};
+
+  Future<Map<String, String>> fetchList() async {
+    try {
+      final res = await http.get(
+          Uri.parse('${AppConfig.vocPassApiHost}/api/wallpaper/font'));
+      if (res.statusCode != 200) return {};
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      final data = decoded['data'] as Map<String, dynamic>;
+      _list = data.map((k, v) => MapEntry(k, v as String));
+      return _list;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  String? loadedFamily(String displayName) => _loadedFonts[displayName];
+
+  Future<String?> load(String displayName) async {
+    if (_loadedFonts.containsKey(displayName)) return _loadedFonts[displayName];
+    final urlStr = _list[displayName];
+    if (urlStr == null) return null;
+    try {
+      final res = await http.get(Uri.parse(urlStr));
+      if (res.statusCode != 200) return null;
+      final loader = FontLoader(displayName);
+      loader.addFont(Future.value(ByteData.sublistView(res.bodyBytes)));
+      await loader.load();
+      _loadedFonts[displayName] = displayName;
+      return displayName;
+    } catch (_) {
+      return null;
+    }
+  }
+}
 
 // ─────────────────────────── Layer model ───────────────────────────
 
@@ -34,7 +81,9 @@ class _EditorLayer {
   int rows;
   double baseFontSize;
   String fontColorHex;
+  String fontFamily;
   double tableOpacity;
+  double stickerOpacity;
   WallpaperTableConfig? tableConfig;
 
   _EditorLayer({
@@ -52,7 +101,9 @@ class _EditorLayer {
     this.rows = 0,
     this.baseFontSize = 14,
     this.fontColorHex = '#000000',
+    this.fontFamily = 'Noto',
     this.tableOpacity = 1.0,
+    this.stickerOpacity = 1.0,
     this.tableConfig,
   });
 
@@ -71,12 +122,14 @@ class _EditorLayer {
         rows: rows,
         baseFontSize: baseFontSize,
         fontColorHex: fontColorHex,
+        fontFamily: fontFamily,
         tableOpacity: tableOpacity,
+        stickerOpacity: stickerOpacity,
         tableConfig: tableConfig,
       );
 }
 
-// ─────────────────────── Image cache & helpers ───────────────────────
+// ─────────────────── Image cache & helpers ───────────────────────
 
 final _imgCache = <String, Uint8List>{};
 
@@ -101,7 +154,7 @@ Future<(Uint8List, double, double)> _fetchImageWithSize(String url) async {
   return (bytes, img.width.toDouble(), img.height.toDouble());
 }
 
-// ─────────────────────────── Timetable helpers ───────────────────────
+// ─────────────────────── Timetable helpers ───────────────────────
 
 const _chineseNum = {
   '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7,
@@ -188,7 +241,6 @@ List<List<String>> _buildSubjectGrid(TimetableData? t, int rows) {
 
 // ─────────────────────────── Canvas sizing ───────────────────────────
 
-/// Mirrors Swift's canvasRect(in:) — safeH reserves 120pt for floating toolbar.
 Size _computeCanvasSize(Size available) {
   const aspect = 9.0 / 19.5;
   final safeW = math.min(available.width - 16, 500.0);
@@ -223,13 +275,15 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
   Size _canvasSize = Size.zero;
   bool _initialized = false;
 
+  // Font
+  Map<String, String> _fontList = {};
+  bool _isLoadingFont = false;
+
   // Gesture tracking
   Offset? _panOrigin;
   Offset? _centerOrigin;
   Size? _sizeOrigin;
   double? _rotOrigin;
-  double _prevScale = 1.0;
-  double _prevRotation = 0.0;
 
   // Undo
   final List<List<_EditorLayer>> _undoStack = [];
@@ -240,7 +294,6 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     if (!_initialized) {
       _initialized = true;
       final mq = MediaQuery.of(context);
-      // Full body height: screen - statusBar - appBar
       final bodyH = mq.size.height - mq.padding.top - kToolbarHeight;
       _canvasSize = _computeCanvasSize(Size(mq.size.width, bodyH));
       WidgetsBinding.instance.addPostFrameCallback((_) => _preload());
@@ -271,7 +324,6 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
         _fetchImageWithSize(tableUrl),
       ]);
 
-      // Pre-warm stickers (background)
       for (final u in tpl.images.stickers) _fetchImage(u);
 
       final cw = _canvasSize.width;
@@ -289,6 +341,7 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
         return math.max(8.0, math.min(cellW, cellH) * 0.32);
       }();
       final subjects = _buildSubjectGrid(timetable, rows);
+      final defaultFamily = tpl.fontFamily ?? 'Noto';
 
       final newLayers = [
         _EditorLayer(
@@ -306,12 +359,12 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
           size: Size(cw, tableDisplayH),
           subjects: subjects, rows: rows, baseFontSize: baseFont,
           fontColorHex: tpl.fontColor ?? '#000000',
+          fontFamily: defaultFamily,
           tableOpacity: tpl.tableOpacity ?? 1.0,
           tableConfig: tableConfig,
         ),
       ];
 
-      // Random stickers
       final rng = math.Random();
       for (int i = 0; i < tpl.stickers; i++) {
         if (tpl.images.stickers.isEmpty) break;
@@ -337,6 +390,12 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
       }
 
       if (mounted) setState(() { _layers = newLayers; _isLoading = false; });
+
+      // Load font list + default font in background
+      final fontList = await _WallpaperFontLoader.shared.fetchList();
+      if (mounted) setState(() => _fontList = fontList);
+      await _WallpaperFontLoader.shared.load(defaultFamily);
+      if (mounted) setState(() {});
     } catch (e) {
       if (mounted) setState(() { _loadError = e.toString(); _isLoading = false; });
     }
@@ -371,8 +430,6 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     _centerOrigin = _layers[i].center;
     _sizeOrigin = _layers[i].size;
     _rotOrigin = _layers[i].rotation;
-    _prevScale = 1.0;
-    _prevRotation = 0.0;
     setState(() => _selectedId = id);
   }
 
@@ -403,6 +460,43 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
   }
 
   // ─────────────── Image ops ───────────────
+
+  Future<void> _addStickerFromGallery() async {
+    final picker = ImagePicker();
+    XFile? picked;
+    try {
+      picked = await picker.pickImage(source: ImageSource.gallery);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('無法開啟相簿：$e')),
+        );
+      }
+      return;
+    }
+    if (picked == null || !mounted) return;
+    final bytes = await picked.readAsBytes();
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final img = frame.image;
+    final rng = math.Random();
+    const baseW = 80.0;
+    final baseH = baseW * img.height / math.max(1, img.width);
+    setState(() {
+      _pushUndo();
+      _layers.add(_EditorLayer(
+        id: UniqueKey().toString(), kind: _LayerKind.sticker,
+        imageBytes: bytes,
+        naturalWidth: img.width.toDouble(), naturalHeight: img.height.toDouble(),
+        sourceUrls: const [],
+        center: Offset(
+          baseW + rng.nextDouble() * math.max(0, _canvasSize.width - 2 * baseW),
+          baseH + rng.nextDouble() * math.max(0, _canvasSize.height - 2 * baseH),
+        ),
+        size: Size(baseW, baseH),
+      ));
+    });
+  }
 
   Future<void> _addStickerFromUrl(String url) async {
     final bytes = await _fetchImage(url);
@@ -460,12 +554,12 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     final tableConfig = tpl.images.table[key];
     if (tableConfig == null || tableConfig.images.isEmpty) return;
     final url = tableConfig.images.first;
+    final cache = Provider.of<CacheService>(context, listen: false);
     final bytes = await _fetchImage(url);
     if (bytes == null || !mounted) return;
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     final img = frame.image;
-    final cache = Provider.of<CacheService>(context, listen: false);
     final subjects = _buildSubjectGrid(cache.getCachedTimetable(), newCount);
     setState(() {
       final i = _idx(layerId);
@@ -520,8 +614,12 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
 
   void _reportUsage() {
     final name = Uri.encodeComponent(widget.template.name);
-    http.post(Uri.parse(
-        '${AppConfig.vocPassApiHost}/api/wallpaper/curriculum/status?wallpaper_name=$name'));
+    final headers = <String, String>{};
+    VocPassAuthService.instance.applyAuthHeader(headers);
+    http.post(
+      Uri.parse('${AppConfig.vocPassApiHost}/api/wallpaper/curriculum/status?wallpaper_name=$name'),
+      headers: headers,
+    );
   }
 
   void _showSavedDialog() {
@@ -577,12 +675,10 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
           ),
         ],
       ),
-      // Full-screen Stack: canvas fills everything, toolbar floats at bottom
       body: Stack(
         fit: StackFit.expand,
         children: [
           Container(color: Colors.black),
-          // ── Loading / Error ──
           if (_isLoading)
             const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               CircularProgressIndicator(color: Colors.white),
@@ -601,7 +697,6 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
                 FilledButton(onPressed: _preload, child: const Text('重試')),
               ]),
             )),
-          // ── Canvas (centered like iOS) ──
           if (!_isLoading && _loadError == null)
             GestureDetector(
               onTap: () => setState(() => _selectedId = null),
@@ -625,7 +720,6 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
                 ),
               ),
             ),
-          // ── Floating toolbar ──
           if (!_isLoading && _loadError == null)
             Positioned(
               left: 12, right: 12,
@@ -693,7 +787,10 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
         ]);
       case _LayerKind.sticker:
         if (bytes == null) return const SizedBox.expand();
-        return Image.memory(bytes, fit: BoxFit.fill, gaplessPlayback: true);
+        return Opacity(
+          opacity: layer.stickerOpacity.clamp(0.0, 1.0),
+          child: Image.memory(bytes, fit: BoxFit.fill, gaplessPlayback: true),
+        );
     }
   }
 
@@ -710,6 +807,7 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     final cellW = usableW / 5;
     final cellH = usableH / math.max(1, layer.rows);
     final textColor = _hexToColor(layer.fontColorHex);
+    final loadedFamily = _WallpaperFontLoader.shared.loadedFamily(layer.fontFamily);
 
     return Positioned(
       left: leftI, top: topI, right: rightI, bottom: botI,
@@ -726,6 +824,7 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
                     child: Text(
                       c < row.length ? row[c] : '',
                       style: TextStyle(
+                          fontFamily: loadedFamily,
                           fontSize: layer.baseFontSize,
                           color: textColor,
                           height: 1.1),
@@ -747,12 +846,11 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
 
   Widget _buildToolbar() {
     final sel = _selectedId != null
-        ? _layers.firstWhere((l) => l.id == _selectedId,
-            orElse: () => _layers.first)
+        ? _layers.firstWhereOrNull((l) => l.id == _selectedId)
         : null;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(30),
@@ -769,46 +867,64 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _tbBtn(Icons.add_circle_outline, '新增貼圖', () => _showStickerPicker()),
-        const Expanded(
-          child: Center(
-            child: Text('點選圖層即可編輯',
-                style: TextStyle(color: Colors.white60, fontSize: 12)),
-          ),
-        ),
+        const Text('點選圖層即可編輯',
+            style: TextStyle(color: Colors.white60, fontSize: 12)),
+        _tbBtn(Icons.photo_library_outlined, '從相簿', () => _addStickerFromGallery()),
       ],
     );
   }
 
   Widget _buildSelectedToolbar(_EditorLayer layer) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
+    if (layer.kind == _LayerKind.sticker) {
+      final i = _idx(layer.id);
+      return Row(
         children: [
           _tbBtn(Icons.photo_library_outlined, '更換', () => _showImagePicker(layer)),
           const SizedBox(width: 8),
-          if (layer.kind == _LayerKind.table) ...[
-            _tbBtn(Icons.text_fields, '文字', () => _showTextSettings(layer)),
-            const SizedBox(width: 8),
-            _tbBtn(Icons.tune, '進階', () => _showAdvancedSettings(layer)),
-            const SizedBox(width: 8),
-          ],
-          if (layer.kind == _LayerKind.sticker) ...[
-            _tbBtn(Icons.opacity, '透明度', () => _showStickerOpacity(layer)),
-            const SizedBox(width: 8),
-            _tbBtn(Icons.delete_outline, '刪除', () {
-              setState(() {
-                _pushUndo();
-                _layers.removeWhere((l) => l.id == layer.id);
-                _selectedId = null;
-              });
-            }, color: Colors.redAccent),
-            const SizedBox(width: 8),
-          ],
-          _tbBtn(Icons.check, '完成',
-              () => setState(() => _selectedId = null)),
+          const Icon(Icons.opacity, color: Colors.white, size: 18),
+          Expanded(
+            child: Slider(
+              value: i >= 0 ? _layers[i].stickerOpacity : 1.0,
+              min: 0, max: 1, divisions: 20,
+              onChanged: (v) => setState(() {
+                final idx = _idx(layer.id);
+                if (idx >= 0) _layers[idx].stickerOpacity = v;
+              }),
+            ),
+          ),
+          SizedBox(
+            width: 36,
+            child: Text(
+              '${((i >= 0 ? _layers[i].stickerOpacity : 1.0) * 100).round()}%',
+              style: const TextStyle(color: Colors.white, fontSize: 10),
+              textAlign: TextAlign.right,
+            ),
+          ),
+          const SizedBox(width: 8),
+          _tbBtn(Icons.delete_outline, '刪除', () {
+            setState(() {
+              _pushUndo();
+              _layers.removeWhere((l) => l.id == layer.id);
+              _selectedId = null;
+            });
+          }, color: Colors.redAccent),
+          const SizedBox(width: 8),
+          _tbBtn(Icons.check, '完成', () => setState(() => _selectedId = null)),
         ],
-      ),
+      );
+    }
+
+    // background or table
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _tbBtn(Icons.photo_library_outlined, '更換', () => _showImagePicker(layer)),
+        if (layer.kind == _LayerKind.table) ...[
+          _tbBtn(Icons.text_fields, '文字', () => _showTextSettings(layer)),
+          _tbBtn(Icons.tune, '進階', () => _showAdvancedSettings(layer)),
+        ],
+        _tbBtn(Icons.check, '完成', () => setState(() => _selectedId = null)),
+      ],
     );
   }
 
@@ -897,6 +1013,7 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     if (i < 0) return;
     double fontSize = layer.baseFontSize;
     String colorHex = layer.fontColorHex;
+    String fontFamily = layer.fontFamily;
 
     const presetColors = [
       '#000000', '#FFFFFF', '#FF0000', '#FF6600',
@@ -907,72 +1024,170 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
       context: context,
       isScrollControlled: true,
       builder: (_) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
-          padding: EdgeInsets.only(
-              left: 20, right: 20, top: 20,
-              bottom: 20 + MediaQuery.of(ctx).viewInsets.bottom),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (ctx, setSheet) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          builder: (_, scrollCtrl) => Column(
             children: [
-              Row(children: [
-                const Text('文字設定',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-                const Spacer(),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _layers[_idx(layer.id)]
-                        ..baseFontSize = fontSize
-                        ..fontColorHex = colorHex;
-                    });
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('完成'),
+              // Handle
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-              ]),
-              const SizedBox(height: 16),
-              const Text('字體大小',
-                  style: TextStyle(fontWeight: FontWeight.w500)),
-              Row(children: [
-                Expanded(
-                  child: Slider(
-                    value: fontSize.clamp(3.0, 24.0),
-                    min: 3, max: 24, divisions: 21,
-                    onChanged: (v) => setSheet(() => fontSize = v),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(children: [
+                  const Text('文字設定',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        final idx = _idx(layer.id);
+                        if (idx >= 0) {
+                          _layers[idx]
+                            ..baseFontSize = fontSize
+                            ..fontColorHex = colorHex
+                            ..fontFamily = fontFamily;
+                        }
+                      });
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('完成'),
                   ),
-                ),
-                SizedBox(
-                  width: 32,
-                  child: Text('${fontSize.round()}',
-                      textAlign: TextAlign.right),
-                ),
-              ]),
-              const SizedBox(height: 12),
-              const Text('字體顏色',
-                  style: TextStyle(fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10, runSpacing: 10,
-                children: presetColors.map((hex) {
-                  final selected = colorHex.toUpperCase() == hex.toUpperCase();
-                  return GestureDetector(
-                    onTap: () => setSheet(() => colorHex = hex),
-                    child: Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: _hexToColor(hex),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: selected ? Colors.blue : Colors.grey.shade400,
-                          width: selected ? 3 : 1,
+                ]),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  children: [
+                    const SizedBox(height: 8),
+                    const Text('字體大小', style: TextStyle(fontWeight: FontWeight.w500)),
+                    Row(children: [
+                      Expanded(
+                        child: Slider(
+                          value: fontSize.clamp(3.0, 24.0),
+                          min: 3, max: 24, divisions: 21,
+                          onChanged: (v) => setSheet(() => fontSize = v),
                         ),
                       ),
+                      SizedBox(
+                        width: 32,
+                        child: Text('${fontSize.round()}', textAlign: TextAlign.right),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                    const Text('字體顏色', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10, runSpacing: 10,
+                      children: [
+                        ...presetColors.map((hex) {
+                          final selected = colorHex.toUpperCase() == hex.toUpperCase();
+                          return GestureDetector(
+                            onTap: () => setSheet(() => colorHex = hex),
+                            child: Container(
+                              width: 32, height: 32,
+                              decoration: BoxDecoration(
+                                color: _hexToColor(hex),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: selected ? Colors.blue : Colors.grey.shade400,
+                                  width: selected ? 3 : 1,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                        // 自訂顏色按鈕
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showDialog<Color>(
+                              context: ctx,
+                              builder: (_) => _ColorPickerDialog(
+                                initial: _hexToColor(colorHex),
+                              ),
+                            );
+                            if (picked != null) {
+                              setSheet(() => colorHex = _colorToHex(picked));
+                            }
+                          },
+                          child: Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.grey.shade400),
+                              gradient: const SweepGradient(colors: [
+                                Colors.red, Colors.yellow, Colors.green,
+                                Colors.cyan, Colors.blue, Colors.purple, Colors.red,
+                              ]),
+                            ),
+                            child: const Icon(Icons.add, size: 16, color: Colors.white),
+                          ),
+                        ),
+                      ],
                     ),
-                  );
-                }).toList(),
+                    const SizedBox(height: 4),
+                    Text(colorHex,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 16),
+                    Row(children: [
+                      const Text('字型', style: TextStyle(fontWeight: FontWeight.w500)),
+                      const Spacer(),
+                      if (_isLoadingFont)
+                        const SizedBox(width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => launchUrl(
+                          Uri.parse('${AppConfig.vocPassApiHost}/font'),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                        child: const Text('預覽所有字型',
+                            style: TextStyle(color: Colors.blue, fontSize: 13)),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    if (_fontList.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('字型載入中⋯', style: TextStyle(color: Colors.grey)),
+                      )
+                    else
+                      ...(_fontList.keys.toList()..sort()).map((name) => InkWell(
+                        onTap: _isLoadingFont ? null : () async {
+                          setSheet(() => fontFamily = name);
+                          if (!mounted) return;
+                          setState(() => _isLoadingFont = true);
+                          await _WallpaperFontLoader.shared.load(name);
+                          if (!mounted) return;
+                          setState(() => _isLoadingFont = false);
+                          setSheet(() {});
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          child: Row(children: [
+                            Text(name),
+                            const Spacer(),
+                            if (name == fontFamily && _isLoadingFont)
+                              const SizedBox(width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2))
+                            else if (name == fontFamily)
+                              const Icon(Icons.check, color: Colors.blue, size: 18),
+                          ]),
+                        ),
+                      )),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
             ],
           ),
         ),
@@ -1018,8 +1233,7 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
                 ),
               ]),
               const SizedBox(height: 16),
-              const Text('課表透明度',
-                  style: TextStyle(fontWeight: FontWeight.w500)),
+              const Text('課表透明度', style: TextStyle(fontWeight: FontWeight.w500)),
               Row(children: [
                 Expanded(
                   child: Slider(
@@ -1069,43 +1283,6 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
       ),
     );
   }
-
-  void _showStickerOpacity(_EditorLayer layer) {
-    double opacity = 1.0;
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('貼圖透明度',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-              Row(children: [
-                Expanded(
-                  child: Slider(
-                    value: opacity, min: 0, max: 1, divisions: 20,
-                    label: '${(opacity * 100).round()}%',
-                    onChanged: (v) => setSheet(() => opacity = v),
-                  ),
-                ),
-                SizedBox(
-                  width: 44,
-                  child: Text('${(opacity * 100).round()}%',
-                      textAlign: TextAlign.right),
-                ),
-              ]),
-              FilledButton(
-                onPressed: () { Navigator.pop(ctx); },
-                child: const Text('完成'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ─────────────── Util ───────────────
@@ -1115,4 +1292,99 @@ Color _hexToColor(String hex) {
   if (h.length == 6) h = 'FF$h';
   if (h.length == 8) return Color(int.parse(h, radix: 16));
   return Colors.black;
+}
+
+String _colorToHex(Color color) {
+  final r = (color.r * 255).round();
+  final g = (color.g * 255).round();
+  final b = (color.b * 255).round();
+  return '#${r.toRadixString(16).padLeft(2, '0')}${g.toRadixString(16).padLeft(2, '0')}${b.toRadixString(16).padLeft(2, '0')}'.toUpperCase();
+}
+
+extension _ListExt<T> on List<T> {
+  T? firstWhereOrNull(bool Function(T) test) {
+    for (final e in this) {
+      if (test(e)) return e;
+    }
+    return null;
+  }
+}
+
+// ─────────────── Color picker dialog ───────────────
+
+class _ColorPickerDialog extends StatefulWidget {
+  final Color initial;
+  const _ColorPickerDialog({required this.initial});
+
+  @override
+  State<_ColorPickerDialog> createState() => _ColorPickerDialogState();
+}
+
+class _ColorPickerDialogState extends State<_ColorPickerDialog> {
+  late double _h, _s, _v;
+
+  @override
+  void initState() {
+    super.initState();
+    final hsv = HSVColor.fromColor(widget.initial);
+    _h = hsv.hue;
+    _s = hsv.saturation;
+    _v = hsv.value;
+  }
+
+  Color get _current => HSVColor.fromAHSV(1, _h, _s, _v).toColor();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('自訂顏色'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Preview
+          Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: _current,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Hue
+          _sliderRow('色相', _h, 0, 360, (v) => setState(() => _h = v),
+              activeColor: HSVColor.fromAHSV(1, _h, 1, 1).toColor()),
+          _sliderRow('飽和度', _s, 0, 1, (v) => setState(() => _s = v)),
+          _sliderRow('明度', _v, 0, 1, (v) => setState(() => _v = v)),
+          const SizedBox(height: 4),
+          Text(_colorToHex(_current),
+              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _current),
+          child: const Text('確定'),
+        ),
+      ],
+    );
+  }
+
+  Widget _sliderRow(String label, double value, double min, double max,
+      ValueChanged<double> onChanged, {Color? activeColor}) {
+    return Row(children: [
+      SizedBox(width: 48, child: Text(label, style: const TextStyle(fontSize: 12))),
+      Expanded(
+        child: SliderTheme(
+          data: activeColor != null
+              ? SliderTheme.of(context).copyWith(activeTrackColor: activeColor,
+                  thumbColor: activeColor)
+              : SliderTheme.of(context),
+          child: Slider(value: value, min: min, max: max,
+              onChanged: onChanged),
+        ),
+      ),
+    ]);
+  }
 }

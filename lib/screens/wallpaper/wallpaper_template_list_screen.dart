@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_config.dart';
 import '../../services/vocpass_auth_service.dart';
@@ -80,6 +81,7 @@ class WallpaperTemplate {
   final int stickers;
   final double? fontSize;
   final String? fontColor;
+  final String? fontFamily;
   final double? tableOpacity;
 
   const WallpaperTemplate({
@@ -92,6 +94,7 @@ class WallpaperTemplate {
     required this.stickers,
     this.fontSize,
     this.fontColor,
+    this.fontFamily,
     this.tableOpacity,
   });
 
@@ -107,6 +110,7 @@ class WallpaperTemplate {
       stickers: (json['stickers'] as num?)?.toInt() ?? 0,
       fontSize: (json['font_size'] as num?)?.toDouble(),
       fontColor: json['font_color'] as String?,
+      fontFamily: json['font_family'] as String?,
       tableOpacity: (json['table_opacity'] as num?)?.toDouble(),
     );
   }
@@ -200,8 +204,12 @@ class _WallpaperTemplateListScreenState
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_horiz),
             onSelected: (value) async {
-              final uri = Uri.parse(value);
-              // launched by url_launcher already imported via home_page_screen
+              final uri = switch (value) {
+                'creator-policy' => Uri.parse('https://vocpass.com/creator-policy'),
+                'terms-of-use' => Uri.parse('https://vocpass.com/terms-of-use'),
+                _ => Uri.parse(value),
+              };
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
             },
             itemBuilder: (_) => const [
               PopupMenuItem(
@@ -217,6 +225,14 @@ class _WallpaperTemplateListScreenState
                 child: ListTile(
                   leading: Icon(Icons.description_outlined),
                   title: Text('創作者政策'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'terms-of-use',
+                child: ListTile(
+                  leading: Icon(Icons.gavel_outlined),
+                  title: Text('使用條款'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
