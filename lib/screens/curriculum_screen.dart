@@ -610,50 +610,57 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
 
     return GestureDetector(
       onTap: () => _showCellEditSheet(weekday, period),
-      child: Stack(
-        children: [
-          Container(
-            constraints: const BoxConstraints(minHeight: 60),
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-            color: subject.isEmpty
-                ? Colors.white
-                : _randomColor(subject).withValues(alpha: 0.12),
-            alignment: Alignment.center,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (subject.isNotEmpty)
-                  Text(
-                    subject,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                if (meta.isNotEmpty)
-                  Text(
-                    meta,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 8, color: Colors.grey),
-                    maxLines: 2,
-                  ),
-              ],
-            ),
-          ),
-          if (isManual)
-            Positioned(
-              top: 2,
-              right: 2,
-              child: Container(
-                width: 5,
-                height: 5,
-                decoration: const BoxDecoration(
-                  color: Colors.orange,
-                  shape: BoxShape.circle,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 60),
+        color: subject.isEmpty
+            ? Colors.white
+            : _randomColor(subject).withValues(alpha: 0.12),
+        child: Stack(
+          fit: StackFit.passthrough,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              child: Align(
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (subject.isNotEmpty)
+                      Text(
+                        subject,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 11),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (meta.isNotEmpty)
+                      Text(
+                        meta,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 8, color: Colors.grey),
+                        maxLines: 2,
+                      ),
+                  ],
                 ),
               ),
             ),
-        ],
+            if (isManual)
+              const Positioned(
+                top: 2,
+                right: 2,
+                child: SizedBox(
+                  width: 5,
+                  height: 5,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

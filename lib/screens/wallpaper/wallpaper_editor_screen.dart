@@ -22,12 +22,11 @@ class _EditorLayer {
   String id;
   _LayerKind kind;
   Uint8List? imageBytes;
-  // Natural (original) image dimensions — used to scale inset values
   double naturalWidth;
   double naturalHeight;
   List<String> sourceUrls;
   int sourceIndex;
-  Offset center; // center in canvas-local coordinates
+  Offset center;
   Size size;
   double rotation;
   // table-specific
@@ -57,37 +56,27 @@ class _EditorLayer {
     this.tableConfig,
   });
 
-  _EditorLayer copyWith({
-    Uint8List? imageBytes,
-    double? naturalWidth,
-    double? naturalHeight,
-    Offset? center,
-    Size? size,
-    double? rotation,
-    double? tableOpacity,
-  }) {
-    return _EditorLayer(
-      id: id,
-      kind: kind,
-      imageBytes: imageBytes ?? this.imageBytes,
-      naturalWidth: naturalWidth ?? this.naturalWidth,
-      naturalHeight: naturalHeight ?? this.naturalHeight,
-      sourceUrls: sourceUrls,
-      sourceIndex: sourceIndex,
-      center: center ?? this.center,
-      size: size ?? this.size,
-      rotation: rotation ?? this.rotation,
-      subjects: subjects,
-      rows: rows,
-      baseFontSize: baseFontSize,
-      fontColorHex: fontColorHex,
-      tableOpacity: tableOpacity ?? this.tableOpacity,
-      tableConfig: tableConfig,
-    );
-  }
+  _EditorLayer clone() => _EditorLayer(
+        id: id,
+        kind: kind,
+        imageBytes: imageBytes,
+        naturalWidth: naturalWidth,
+        naturalHeight: naturalHeight,
+        sourceUrls: List.from(sourceUrls),
+        sourceIndex: sourceIndex,
+        center: center,
+        size: size,
+        rotation: rotation,
+        subjects: subjects,
+        rows: rows,
+        baseFontSize: baseFontSize,
+        fontColorHex: fontColorHex,
+        tableOpacity: tableOpacity,
+        tableConfig: tableConfig,
+      );
 }
 
-// ─────────────────────────── Image cache ───────────────────────────
+// ─────────────────────── Image cache & helpers ───────────────────────
 
 final _imgCache = <String, Uint8List>{};
 
@@ -112,7 +101,7 @@ Future<(Uint8List, double, double)> _fetchImageWithSize(String url) async {
   return (bytes, img.width.toDouble(), img.height.toDouble());
 }
 
-// ─────────────────────────── Timetable helpers ───────────────────────────
+// ─────────────────────────── Timetable helpers ───────────────────────
 
 const _chineseNum = {
   '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7,
@@ -120,7 +109,8 @@ const _chineseNum = {
   '十三': 13, '十四': 14, '十五': 15,
 };
 const _periodNames = [
-  '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二', '十三', '十四', '十五'
+  '一', '二', '三', '四', '五', '六', '七', '八', '九', '十',
+  '十一', '十二', '十三', '十四', '十五',
 ];
 const _weekdays = ['一', '二', '三', '四', '五'];
 
@@ -130,22 +120,16 @@ const _placeholders = [
   '健護', '家政', '生科', '國防', '輔導', '社團', '班會',
 ];
 
-int _parseChinesePeriod(String p) {
-  return _chineseNum[p] ?? int.tryParse(p) ?? 0;
-}
-
 int _computeMaxPeriod(TimetableData? t) {
   if (t == null) return 8;
   int max = 0;
-  for (final e in t.entries) {
-    final n = _parseChinesePeriod(e.period);
+  void check(String p) {
+    final n = _chineseNum[p] ?? int.tryParse(p) ?? 0;
     if (n > max) max = n;
   }
+  for (final e in t.entries) check(e.period);
   for (final info in t.curriculum.values) {
-    for (final s in info.schedule) {
-      final n = _parseChinesePeriod(s.period);
-      if (n > max) max = n;
-    }
+    for (final s in info.schedule) check(s.period);
   }
   return max > 0 ? max : 8;
 }
@@ -165,24 +149,21 @@ String? _pickTableKey(WallpaperTemplate template, int userMax) {
 
 List<List<String>> _buildSubjectGrid(TimetableData? t, int rows) {
   final grid = List.generate(rows, (_) => List.filled(5, ''));
-
   if (t != null) {
     for (int r = 0; r < rows && r < _periodNames.length; r++) {
       final periodKey = _periodNames[r];
       for (int c = 0; c < 5; c++) {
-        final weekday = _weekdays[c];
-        // Check curriculum
+        final wd = _weekdays[c];
         for (final entry in t.curriculum.entries) {
           for (final s in entry.value.schedule) {
-            if (s.weekday == weekday && s.period == periodKey) {
+            if (s.weekday == wd && s.period == periodKey) {
               grid[r][c] = entry.key;
             }
           }
         }
-        // Check entries if still empty
         if (grid[r][c].isEmpty) {
           for (final e in t.entries) {
-            if (e.weekday == weekday && e.period == periodKey) {
+            if (e.weekday == wd && e.period == periodKey) {
               grid[r][c] = e.subject;
               break;
             }
@@ -191,8 +172,6 @@ List<List<String>> _buildSubjectGrid(TimetableData? t, int rows) {
       }
     }
   }
-
-  // Fill empty with placeholder
   final shuffled = [..._placeholders]..shuffle();
   int idx = 0;
   for (int r = 0; r < rows; r++) {
@@ -207,11 +186,26 @@ List<List<String>> _buildSubjectGrid(TimetableData? t, int rows) {
   return grid;
 }
 
+// ─────────────────────────── Canvas sizing ───────────────────────────
+
+/// Mirrors Swift's canvasRect(in:) — safeH reserves 120pt for floating toolbar.
+Size _computeCanvasSize(Size available) {
+  const aspect = 9.0 / 19.5;
+  final safeW = math.min(available.width - 16, 500.0);
+  final safeH = available.height - 120.0;
+  var w = safeW;
+  var h = w / aspect;
+  if (h > safeH) {
+    h = safeH;
+    w = h * aspect;
+  }
+  return Size(w, h);
+}
+
 // ─────────────────────────── Editor Screen ───────────────────────────
 
 class WallpaperEditorScreen extends StatefulWidget {
   final WallpaperTemplate template;
-
   const WallpaperEditorScreen({super.key, required this.template});
 
   @override
@@ -227,64 +221,47 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
   String? _loadError;
   bool _isSaving = false;
   Size _canvasSize = Size.zero;
+  bool _initialized = false;
 
-  // Gesture state
-  Offset? _panStart;
-  Offset? _layerCenterStart;
-  double? _scaleStart;
-  Size? _layerSizeStart;
-  double? _rotationStart;
-  double? _layerRotationStart;
+  // Gesture tracking
+  Offset? _panOrigin;
+  Offset? _centerOrigin;
+  Size? _sizeOrigin;
+  double? _rotOrigin;
+  double _prevScale = 1.0;
+  double _prevRotation = 0.0;
 
-  // Undo stack
+  // Undo
   final List<List<_EditorLayer>> _undoStack = [];
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_isLoading && _canvasSize == Size.zero) {
+    if (!_initialized) {
+      _initialized = true;
+      final mq = MediaQuery.of(context);
+      // Full body height: screen - statusBar - appBar
+      final bodyH = mq.size.height - mq.padding.top - kToolbarHeight;
+      _canvasSize = _computeCanvasSize(Size(mq.size.width, bodyH));
       WidgetsBinding.instance.addPostFrameCallback((_) => _preload());
     }
   }
 
-  Size _computeCanvasSize(Size screen) {
-    const aspect = 9.0 / 19.5;
-    final safeW = math.min(screen.width - 16, 500.0);
-    final safeH = screen.height - 180.0;
-    var w = safeW;
-    var h = w / aspect;
-    if (h > safeH) {
-      h = safeH;
-      w = h * aspect;
-    }
-    return Size(w, h);
-  }
+  // ─────────────── Preload ───────────────
 
   Future<void> _preload() async {
-    final screen = MediaQuery.of(context).size;
-    final canvas = _computeCanvasSize(screen);
-
-    setState(() {
-      _isLoading = true;
-      _loadError = null;
-      _canvasSize = canvas;
-    });
-
+    setState(() { _isLoading = true; _loadError = null; });
     try {
       final tpl = widget.template;
       final cache = Provider.of<CacheService>(context, listen: false);
       final timetable = cache.getCachedTimetable();
       final userMax = _computeMaxPeriod(timetable);
 
-      // Pick table key
       final chosenKey = _pickTableKey(tpl, userMax);
-      if (chosenKey == null) {
-        throw Exception('此模板最多不支援 $userMax 節的課表');
-      }
+      if (chosenKey == null) throw Exception('此模板最多不支援 $userMax 節的課表');
       final tableConfig = tpl.images.table[chosenKey]!;
       if (tableConfig.images.isEmpty) throw Exception('模板缺少課表圖片');
 
-      // Load images
       final bgUrl = tpl.images.background.firstOrNull ?? '';
       final tableUrl = tableConfig.images.first;
 
@@ -294,126 +271,81 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
         _fetchImageWithSize(tableUrl),
       ]);
 
-      // Pre-warm sticker images in background
-      for (final url in tpl.images.stickers) {
-        _fetchImage(url);
-      }
+      // Pre-warm stickers (background)
+      for (final u in tpl.images.stickers) _fetchImage(u);
 
-      final cw = canvas.width;
-      final ch = canvas.height;
+      final cw = _canvasSize.width;
+      final ch = _canvasSize.height;
       final rows = int.tryParse(chosenKey) ?? userMax;
-
-      final baseFont = tpl.fontSize != null
-          ? tpl.fontSize!
-          : () {
-              final scale = cw / tableW;
-              final leftI = tableConfig.left * scale;
-              final rightI = tableConfig.right * scale;
-              final usableW = (cw - leftI - rightI).clamp(0.0, double.infinity);
-              final tblDispH = cw * (tableH / tableW);
-              final cellW = usableW / 5;
-              final cellH = tblDispH / math.max(rows, 1);
-              return math.max(8.0, math.min(cellW, cellH) * 0.32);
-            }();
-
-      final tableDisplayH = cw * (tableH / tableW);
+      final tableDisplayH = cw * (tableH / math.max(1, tableW));
       final tableTop = ch * (tpl.top / 100.0);
-      final tableCenter = Offset(cw / 2, tableTop + tableDisplayH / 2);
+      final baseFont = tpl.fontSize ?? () {
+        final scale = cw / math.max(1, tableW);
+        final leftI = tableConfig.left * scale;
+        final rightI = tableConfig.right * scale;
+        final usableW = (cw - leftI - rightI).clamp(0.0, double.infinity);
+        final cellW = usableW / 5;
+        final cellH = tableDisplayH / math.max(rows, 1);
+        return math.max(8.0, math.min(cellW, cellH) * 0.32);
+      }();
       final subjects = _buildSubjectGrid(timetable, rows);
 
       final newLayers = [
         _EditorLayer(
-          id: UniqueKey().toString(),
-          kind: _LayerKind.background,
-          imageBytes: bgBytes,
-          naturalWidth: bgW,
-          naturalHeight: bgH,
+          id: UniqueKey().toString(), kind: _LayerKind.background,
+          imageBytes: bgBytes, naturalWidth: bgW, naturalHeight: bgH,
           sourceUrls: tpl.images.background,
           center: Offset(cw / 2, ch / 2),
           size: Size(cw, ch),
         ),
         _EditorLayer(
-          id: UniqueKey().toString(),
-          kind: _LayerKind.table,
-          imageBytes: tableBytes,
-          naturalWidth: tableW,
-          naturalHeight: tableH,
+          id: UniqueKey().toString(), kind: _LayerKind.table,
+          imageBytes: tableBytes, naturalWidth: tableW, naturalHeight: tableH,
           sourceUrls: tableConfig.images,
-          center: tableCenter,
+          center: Offset(cw / 2, tableTop + tableDisplayH / 2),
           size: Size(cw, tableDisplayH),
-          subjects: subjects,
-          rows: rows,
-          baseFontSize: baseFont,
+          subjects: subjects, rows: rows, baseFontSize: baseFont,
           fontColorHex: tpl.fontColor ?? '#000000',
           tableOpacity: tpl.tableOpacity ?? 1.0,
           tableConfig: tableConfig,
         ),
       ];
 
-      // Add random stickers
+      // Random stickers
       final rng = math.Random();
-      final stickerUrls = tpl.images.stickers;
-      if (stickerUrls.isNotEmpty) {
-        for (int i = 0; i < tpl.stickers; i++) {
-          final url = stickerUrls[rng.nextInt(stickerUrls.length)];
-          final stickerBytes = await _fetchImage(url);
-          if (stickerBytes != null) {
-            const baseW = 80.0;
-            final codec = await ui.instantiateImageCodec(stickerBytes);
-            final frame = await codec.getNextFrame();
-            final img = frame.image;
-            final baseH = baseW * img.height / math.max(1, img.width);
-            final cx = baseW + rng.nextDouble() * (cw - 2 * baseW);
-            final cy = baseH + rng.nextDouble() * (ch - 2 * baseH);
-            newLayers.add(_EditorLayer(
-              id: UniqueKey().toString(),
-              kind: _LayerKind.sticker,
-              imageBytes: stickerBytes,
-              naturalWidth: img.width.toDouble(),
-              naturalHeight: img.height.toDouble(),
-              sourceUrls: stickerUrls,
-              center: Offset(cx, cy),
-              size: Size(baseW, baseH),
-            ));
-          }
-        }
+      for (int i = 0; i < tpl.stickers; i++) {
+        if (tpl.images.stickers.isEmpty) break;
+        final url = tpl.images.stickers[rng.nextInt(tpl.images.stickers.length)];
+        final bytes = await _fetchImage(url);
+        if (bytes == null) continue;
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        final img = frame.image;
+        const baseW = 80.0;
+        final baseH = baseW * img.height / math.max(1, img.width);
+        newLayers.add(_EditorLayer(
+          id: UniqueKey().toString(), kind: _LayerKind.sticker,
+          imageBytes: bytes,
+          naturalWidth: img.width.toDouble(), naturalHeight: img.height.toDouble(),
+          sourceUrls: tpl.images.stickers,
+          center: Offset(
+            baseW + rng.nextDouble() * math.max(0, cw - 2 * baseW),
+            baseH + rng.nextDouble() * math.max(0, ch - 2 * baseH),
+          ),
+          size: Size(baseW, baseH),
+        ));
       }
 
-      if (mounted) {
-        setState(() {
-          _layers = newLayers;
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() { _layers = newLayers; _isLoading = false; });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _loadError = e.toString();
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() { _loadError = e.toString(); _isLoading = false; });
     }
   }
 
+  // ─────────────── Undo ───────────────
+
   void _pushUndo() {
-    _undoStack.add(_layers.map((l) => _EditorLayer(
-          id: l.id,
-          kind: l.kind,
-          imageBytes: l.imageBytes,
-          naturalWidth: l.naturalWidth,
-          naturalHeight: l.naturalHeight,
-          sourceUrls: l.sourceUrls,
-          sourceIndex: l.sourceIndex,
-          center: l.center,
-          size: l.size,
-          rotation: l.rotation,
-          subjects: l.subjects,
-          rows: l.rows,
-          baseFontSize: l.baseFontSize,
-          fontColorHex: l.fontColorHex,
-          tableOpacity: l.tableOpacity,
-          tableConfig: l.tableConfig,
-        )).toList());
+    _undoStack.add(_layers.map((l) => l.clone()).toList());
     if (_undoStack.length > 30) _undoStack.removeAt(0);
   }
 
@@ -421,75 +353,56 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     if (_undoStack.isEmpty) return;
     setState(() {
       _layers = _undoStack.removeLast();
-      if (_selectedId != null &&
-          !_layers.any((l) => l.id == _selectedId)) {
+      if (_selectedId != null && !_layers.any((l) => l.id == _selectedId)) {
         _selectedId = null;
       }
     });
   }
 
-  int _layerIndex(String id) => _layers.indexWhere((l) => l.id == id);
+  int _idx(String id) => _layers.indexWhere((l) => l.id == id);
 
-  Future<void> _save() async {
-    setState(() => _isSaving = true);
-    try {
-      final boundary = _boundaryKey.currentContext!.findRenderObject()
-          as RenderRepaintBoundary;
-      // Render at ~3× for high quality
-      final pixelRatio = 1242.0 / _canvasSize.width;
-      final image = await boundary.toImage(pixelRatio: pixelRatio);
-      final byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw Exception('無法匯出圖片');
+  // ─────────────── Gesture ───────────────
 
-      await Gal.putImageBytes(byteData.buffer.asUint8List());
-      _reportUsage();
-
-      if (mounted) {
-        setState(() => _isSaving = false);
-        _showSavedDialog();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('儲存失敗：$e')),
-        );
-      }
-    }
+  void _onScaleStart(ScaleStartDetails d, String id) {
+    final i = _idx(id);
+    if (i < 0) return;
+    _pushUndo();
+    _panOrigin = d.localFocalPoint;
+    _centerOrigin = _layers[i].center;
+    _sizeOrigin = _layers[i].size;
+    _rotOrigin = _layers[i].rotation;
+    _prevScale = 1.0;
+    _prevRotation = 0.0;
+    setState(() => _selectedId = id);
   }
 
-  void _reportUsage() {
-    final name = Uri.encodeComponent(widget.template.name);
-    final url =
-        '${AppConfig.vocPassApiHost}/api/wallpaper/curriculum/status?wallpaper_name=$name';
-    http.post(Uri.parse(url));
+  void _onScaleUpdate(ScaleUpdateDetails d, String id) {
+    final i = _idx(id);
+    if (i < 0 || _panOrigin == null) return;
+    setState(() {
+      final l = _layers[i];
+      final delta = d.localFocalPoint - _panOrigin!;
+      final newCenter = _centerOrigin! + delta;
+      final newW = math.max(30.0, _sizeOrigin!.width * d.scale);
+      final newH = math.max(30.0, _sizeOrigin!.height * d.scale);
+      final newRot = l.kind == _LayerKind.sticker
+          ? _rotOrigin! + d.rotation
+          : l.rotation;
+      _layers[i]
+        ..center = newCenter
+        ..size = Size(newW, newH)
+        ..rotation = newRot;
+    });
   }
 
-  void _showSavedDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('儲存完成'),
-        content: const Text('儲存完成，去支持一下作者吧'),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final authorUrl = widget.template.authorUrl;
-              if (authorUrl != null) {
-                final uri = Uri.parse(authorUrl);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                }
-              }
-            },
-            child: const Text('確定'),
-          ),
-        ],
-      ),
-    );
+  void _onScaleEnd(ScaleEndDetails d, String id) {
+    _panOrigin = null;
+    _centerOrigin = null;
+    _sizeOrigin = null;
+    _rotOrigin = null;
   }
+
+  // ─────────────── Image ops ───────────────
 
   Future<void> _addStickerFromUrl(String url) async {
     final bytes = await _fetchImage(url);
@@ -500,18 +413,17 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     final rng = math.Random();
     const baseW = 80.0;
     final baseH = baseW * img.height / math.max(1, img.width);
-    final cx = baseW + rng.nextDouble() * (_canvasSize.width - 2 * baseW);
-    final cy = baseH + rng.nextDouble() * (_canvasSize.height - 2 * baseH);
     setState(() {
       _pushUndo();
       _layers.add(_EditorLayer(
-        id: UniqueKey().toString(),
-        kind: _LayerKind.sticker,
+        id: UniqueKey().toString(), kind: _LayerKind.sticker,
         imageBytes: bytes,
-        naturalWidth: img.width.toDouble(),
-        naturalHeight: img.height.toDouble(),
+        naturalWidth: img.width.toDouble(), naturalHeight: img.height.toDouble(),
         sourceUrls: widget.template.images.stickers,
-        center: Offset(cx, cy),
+        center: Offset(
+          baseW + rng.nextDouble() * math.max(0, _canvasSize.width - 2 * baseW),
+          baseH + rng.nextDouble() * math.max(0, _canvasSize.height - 2 * baseH),
+        ),
         size: Size(baseW, baseH),
       ));
     });
@@ -524,97 +436,120 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     final frame = await codec.getNextFrame();
     final img = frame.image;
     setState(() {
-      final i = _layerIndex(layerId);
+      final i = _idx(layerId);
       if (i < 0) return;
       _pushUndo();
-      final old = _layers[i];
-      final newIdx = old.sourceUrls.indexOf(url);
-      final newH = old.kind == _LayerKind.background
-          ? old.size.height
-          : old.size.width * img.height / math.max(1, img.width);
-      _layers[i] = _EditorLayer(
-        id: old.id,
-        kind: old.kind,
-        imageBytes: bytes,
-        naturalWidth: img.width.toDouble(),
-        naturalHeight: img.height.toDouble(),
-        sourceUrls: old.sourceUrls,
-        sourceIndex: newIdx >= 0 ? newIdx : old.sourceIndex,
-        center: old.center,
-        size: Size(old.size.width, newH),
-        rotation: old.rotation,
-        subjects: old.subjects,
-        rows: old.rows,
-        baseFontSize: old.baseFontSize,
-        fontColorHex: old.fontColorHex,
-        tableOpacity: old.tableOpacity,
-        tableConfig: old.tableConfig,
-      );
+      final l = _layers[i];
+      final newH = l.kind == _LayerKind.background
+          ? l.size.height
+          : l.size.width * img.height / math.max(1, img.width);
+      _layers[i]
+        ..imageBytes = bytes
+        ..naturalWidth = img.width.toDouble()
+        ..naturalHeight = img.height.toDouble()
+        ..sourceIndex = l.sourceUrls.indexOf(url).clamp(0, l.sourceUrls.length - 1)
+        ..size = Size(l.size.width, newH);
     });
   }
 
-  // ────────────────────────── Gestures ──────────────────────────────
+  // ─────────────── Switch period count ───────────────
 
-  void _onScaleStart(ScaleStartDetails d, String layerId) {
-    final i = _layerIndex(layerId);
-    if (i < 0) return;
-    _pushUndo();
-    _panStart = d.localFocalPoint;
-    _layerCenterStart = _layers[i].center;
-    _scaleStart = 1.0;
-    _layerSizeStart = _layers[i].size;
-    _rotationStart = 0.0;
-    _layerRotationStart = _layers[i].rotation;
-    setState(() => _selectedId = layerId);
-  }
-
-  void _onScaleUpdate(ScaleUpdateDetails d, String layerId) {
-    final i = _layerIndex(layerId);
-    if (i < 0) return;
+  Future<void> _switchPeriodCount(String layerId, int newCount) async {
+    final tpl = widget.template;
+    final key = '$newCount';
+    final tableConfig = tpl.images.table[key];
+    if (tableConfig == null || tableConfig.images.isEmpty) return;
+    final url = tableConfig.images.first;
+    final bytes = await _fetchImage(url);
+    if (bytes == null || !mounted) return;
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final img = frame.image;
+    final cache = Provider.of<CacheService>(context, listen: false);
+    final subjects = _buildSubjectGrid(cache.getCachedTimetable(), newCount);
     setState(() {
-      final layer = _layers[i];
-      // Pan
-      final delta = d.localFocalPoint - _panStart!;
-      final newCenter = _layerCenterStart! + delta;
-      // Scale
-      final newW = math.max(30.0, _layerSizeStart!.width * d.scale);
-      final newH = math.max(30.0, _layerSizeStart!.height * d.scale);
-      // Rotation (stickers only)
-      final newRot = layer.kind == _LayerKind.sticker
-          ? _layerRotationStart! + d.rotation
-          : layer.rotation;
-
-      _layers[i] = _EditorLayer(
-        id: layer.id,
-        kind: layer.kind,
-        imageBytes: layer.imageBytes,
-        naturalWidth: layer.naturalWidth,
-        naturalHeight: layer.naturalHeight,
-        sourceUrls: layer.sourceUrls,
-        sourceIndex: layer.sourceIndex,
-        center: newCenter,
-        size: Size(newW, newH),
-        rotation: newRot,
-        subjects: layer.subjects,
-        rows: layer.rows,
-        baseFontSize: layer.baseFontSize,
-        fontColorHex: layer.fontColorHex,
-        tableOpacity: layer.tableOpacity,
-        tableConfig: layer.tableConfig,
-      );
+      final i = _idx(layerId);
+      if (i < 0) return;
+      _pushUndo();
+      final l = _layers[i];
+      final cw = l.size.width;
+      final tableDisplayH = cw * img.height / math.max(1, img.width);
+      final scale = cw / math.max(1, img.width.toDouble());
+      final leftI = tableConfig.left * scale;
+      final rightI = tableConfig.right * scale;
+      final usableW = (cw - leftI - rightI).clamp(0.0, double.infinity);
+      final cellW = usableW / 5;
+      final cellH = tableDisplayH / math.max(newCount, 1);
+      final baseFont = tpl.fontSize ?? math.max(8.0, math.min(cellW, cellH) * 0.32);
+      _layers[i]
+        ..imageBytes = bytes
+        ..naturalWidth = img.width.toDouble()
+        ..naturalHeight = img.height.toDouble()
+        ..sourceUrls = tableConfig.images
+        ..sourceIndex = 0
+        ..size = Size(cw, tableDisplayH)
+        ..rows = newCount
+        ..subjects = subjects
+        ..baseFontSize = baseFont
+        ..tableConfig = tableConfig;
     });
   }
 
-  void _onScaleEnd(ScaleEndDetails d, String layerId) {
-    _panStart = null;
-    _layerCenterStart = null;
-    _scaleStart = null;
-    _layerSizeStart = null;
-    _rotationStart = null;
-    _layerRotationStart = null;
+  // ─────────────── Save ───────────────
+
+  Future<void> _save() async {
+    setState(() => _isSaving = true);
+    try {
+      final boundary = _boundaryKey.currentContext!.findRenderObject()
+          as RenderRepaintBoundary;
+      final pixelRatio = 1242.0 / _canvasSize.width;
+      final image = await boundary.toImage(pixelRatio: pixelRatio);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw Exception('無法匯出圖片');
+      await Gal.putImageBytes(byteData.buffer.asUint8List());
+      _reportUsage();
+      if (mounted) { setState(() => _isSaving = false); _showSavedDialog(); }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('儲存失敗：$e')));
+      }
+    }
   }
 
-  // ────────────────────────── Build ──────────────────────────────
+  void _reportUsage() {
+    final name = Uri.encodeComponent(widget.template.name);
+    http.post(Uri.parse(
+        '${AppConfig.vocPassApiHost}/api/wallpaper/curriculum/status?wallpaper_name=$name'));
+  }
+
+  void _showSavedDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('儲存完成'),
+        content: const Text('儲存完成，去支持一下作者吧'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final url = widget.template.authorUrl;
+              if (url != null) {
+                final uri = Uri.parse(url);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              }
+            },
+            child: const Text('確定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────── Build ───────────────
 
   @override
   Widget build(BuildContext context) {
@@ -634,122 +569,100 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
           IconButton(
             icon: _isSaving
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.save_alt),
             onPressed: _isLoading || _isSaving ? null : _save,
             color: Colors.white,
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(color: Colors.white),
-                  SizedBox(height: 12),
-                  Text('正在施加魔法⋯',
-                      style: TextStyle(color: Colors.white)),
-                ],
-              ),
-            )
-          : _loadError != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.warning_amber_rounded,
-                            size: 48, color: Colors.orange),
-                        const SizedBox(height: 12),
-                        Text(_loadError!,
-                            style: const TextStyle(color: Colors.white),
-                            textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        FilledButton(
-                            onPressed: _preload, child: const Text('重試')),
-                      ],
+      // Full-screen Stack: canvas fills everything, toolbar floats at bottom
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(color: Colors.black),
+          // ── Loading / Error ──
+          if (_isLoading)
+            const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              CircularProgressIndicator(color: Colors.white),
+              SizedBox(height: 12),
+              Text('正在施加魔法⋯', style: TextStyle(color: Colors.white)),
+            ])),
+          if (!_isLoading && _loadError != null)
+            Center(child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.warning_amber_rounded, size: 48, color: Colors.orange),
+                const SizedBox(height: 12),
+                Text(_loadError!, style: const TextStyle(color: Colors.white),
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(onPressed: _preload, child: const Text('重試')),
+              ]),
+            )),
+          // ── Canvas (centered like iOS) ──
+          if (!_isLoading && _loadError == null)
+            GestureDetector(
+              onTap: () => setState(() => _selectedId = null),
+              child: Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: RepaintBoundary(
+                    key: _boundaryKey,
+                    child: SizedBox(
+                      width: _canvasSize.width,
+                      height: _canvasSize.height,
+                      child: Stack(
+                        clipBehavior: Clip.hardEdge,
+                        children: [
+                          Positioned.fill(child: Container(color: Colors.grey.shade300)),
+                          ..._layers.map(_buildLayerWidget),
+                        ],
+                      ),
                     ),
                   ),
-                )
-              : Column(
-                  children: [
-                    Expanded(child: _buildCanvas()),
-                    _buildToolbar(),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-    );
-  }
-
-  Widget _buildCanvas() {
-    return Center(
-      child: LayoutBuilder(builder: (context, constraints) {
-        final size = _computeCanvasSize(
-            Size(constraints.maxWidth, constraints.maxHeight + 200));
-        return SizedBox(
-          width: size.width,
-          height: size.height,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: RepaintBoundary(
-              key: _boundaryKey,
-              child: GestureDetector(
-                onTap: () => setState(() => _selectedId = null),
-                child: Stack(
-                  clipBehavior: Clip.hardEdge,
-                  children: [
-                    // Background color
-                    Positioned.fill(
-                      child: Container(color: Colors.grey.shade300),
-                    ),
-                    // Layers
-                    ..._layers.map((layer) => _buildLayerWidget(layer, size)),
-                  ],
                 ),
               ),
             ),
-          ),
-        );
-      }),
+          // ── Floating toolbar ──
+          if (!_isLoading && _loadError == null)
+            Positioned(
+              left: 12, right: 12,
+              bottom: 8 + MediaQuery.of(context).padding.bottom,
+              child: _buildToolbar(),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _buildLayerWidget(_EditorLayer layer, Size canvasSize) {
-    final isSelected = layer.id == _selectedId;
-    final left = layer.center.dx - layer.size.width / 2;
-    final top = layer.center.dy - layer.size.height / 2;
+  // ─────────────── Canvas layer widget ───────────────
 
+  Widget _buildLayerWidget(_EditorLayer layer) {
+    final isSelected = layer.id == _selectedId;
     return Positioned(
-      left: left,
-      top: top,
+      left: layer.center.dx - layer.size.width / 2,
+      top: layer.center.dy - layer.size.height / 2,
       width: layer.size.width,
       height: layer.size.height,
-      child: Transform.rotate(
-        angle: layer.rotation,
-        child: GestureDetector(
-          onScaleStart: (d) => _onScaleStart(d, layer.id),
-          onScaleUpdate: (d) => _onScaleUpdate(d, layer.id),
-          onScaleEnd: (d) => _onScaleEnd(d, layer.id),
-          onTap: () => setState(() => _selectedId = layer.id),
+      child: GestureDetector(
+        onScaleStart: (d) => _onScaleStart(d, layer.id),
+        onScaleUpdate: (d) => _onScaleUpdate(d, layer.id),
+        onScaleEnd: (d) => _onScaleEnd(d, layer.id),
+        onTap: () => setState(() => _selectedId = layer.id),
+        child: Transform.rotate(
+          angle: layer.rotation,
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              // Layer content
               Positioned.fill(child: _buildLayerContent(layer)),
-              // Selection border
               if (isSelected)
                 Positioned.fill(
                   child: IgnorePointer(
-                    child: Container(
+                    child: DecoratedBox(
                       decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.blue,
-                          width: 2,
-                        ),
+                        border: Border.all(color: Colors.blue, width: 2),
                       ),
                     ),
                   ),
@@ -765,34 +678,27 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     final bytes = layer.imageBytes;
     switch (layer.kind) {
       case _LayerKind.background:
-        if (bytes == null) return const SizedBox();
-        return Image.memory(bytes, fit: BoxFit.fill,
-            width: layer.size.width, height: layer.size.height);
-
+        if (bytes == null) return const SizedBox.expand();
+        return Image.memory(bytes, fit: BoxFit.fill, gaplessPlayback: true);
       case _LayerKind.table:
-        return Stack(
-          children: [
-            if (bytes != null)
-              Opacity(
-                opacity: layer.tableOpacity,
-                child: Image.memory(bytes,
-                    fit: BoxFit.fill,
-                    width: layer.size.width,
-                    height: layer.size.height),
+        return Stack(children: [
+          if (bytes != null)
+            Positioned.fill(
+              child: Opacity(
+                opacity: layer.tableOpacity.clamp(0.0, 1.0),
+                child: Image.memory(bytes, fit: BoxFit.fill, gaplessPlayback: true),
               ),
-            Positioned.fill(child: _buildTextGrid(layer)),
-          ],
-        );
-
+            ),
+          Positioned.fill(child: _buildTextGrid(layer)),
+        ]);
       case _LayerKind.sticker:
-        if (bytes == null) return const SizedBox();
-        return Image.memory(bytes, fit: BoxFit.fill,
-            width: layer.size.width, height: layer.size.height);
+        if (bytes == null) return const SizedBox.expand();
+        return Image.memory(bytes, fit: BoxFit.fill, gaplessPlayback: true);
     }
   }
 
   Widget _buildTextGrid(_EditorLayer layer) {
-    if (layer.rows == 0 || layer.subjects.isEmpty) return const SizedBox();
+    if (layer.rows == 0 || layer.subjects.isEmpty) return const SizedBox.expand();
     final tc = layer.tableConfig;
     final scale = layer.size.width / math.max(1, layer.naturalWidth);
     final leftI = (tc?.left ?? 0) * scale;
@@ -803,28 +709,24 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     final usableH = math.max(0.0, layer.size.height - topI - botI);
     final cellW = usableW / 5;
     final cellH = usableH / math.max(1, layer.rows);
-    final fontSize = layer.baseFontSize;
     final textColor = _hexToColor(layer.fontColorHex);
 
-    return Padding(
-      padding: EdgeInsets.only(
-          left: leftI, right: rightI, top: topI, bottom: botI),
+    return Positioned(
+      left: leftI, top: topI, right: rightI, bottom: botI,
       child: Column(
         children: List.generate(layer.rows, (r) {
-          final row = layer.subjects.length > r ? layer.subjects[r] : [];
+          final row = r < layer.subjects.length ? layer.subjects[r] : <String>[];
           return SizedBox(
             height: cellH,
             child: Row(
               children: List.generate(5, (c) {
-                final text = row.length > c ? row[c] : '';
                 return SizedBox(
                   width: cellW,
-                  height: cellH,
                   child: Center(
                     child: Text(
-                      text,
+                      c < row.length ? row[c] : '',
                       style: TextStyle(
-                          fontSize: fontSize,
+                          fontSize: layer.baseFontSize,
                           color: textColor,
                           height: 1.1),
                       textAlign: TextAlign.center,
@@ -841,57 +743,24 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     );
   }
 
-  // ────────────────────────── Toolbar ──────────────────────────────
+  // ─────────────── Toolbar ───────────────
 
   Widget _buildToolbar() {
-    final selected = _selectedId != null
+    final sel = _selectedId != null
         ? _layers.firstWhere((l) => l.id == _selectedId,
             orElse: () => _layers.first)
         : null;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(30),
-        ),
-        child: selected != null
-            ? _buildSelectedToolbar(selected)
-            : _buildDefaultToolbar(),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
-    );
-  }
-
-  Widget _buildSelectedToolbar(_EditorLayer layer) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        // Switch image
-        _toolbarButton(Icons.photo_library, '更換', () {
-          _showImagePicker(layer);
-        }),
-        // Table opacity if table layer
-        if (layer.kind == _LayerKind.table) ...[
-          _toolbarButton(Icons.opacity, '透明度', () {
-            _showOpacityDialog(layer);
-          }),
-        ],
-        // Delete sticker
-        if (layer.kind == _LayerKind.sticker)
-          _toolbarButton(Icons.delete_outline, '刪除', () {
-            setState(() {
-              _pushUndo();
-              _layers.removeWhere((l) => l.id == layer.id);
-              _selectedId = null;
-            });
-          }, color: Colors.redAccent),
-        // Deselect
-        _toolbarButton(Icons.check, '完成', () {
-          setState(() => _selectedId = null);
-        }),
-      ],
+      child: sel != null
+          ? _buildSelectedToolbar(sel)
+          : _buildDefaultToolbar(),
     );
   }
 
@@ -899,16 +768,51 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _toolbarButton(Icons.add_circle_outline, '新增貼圖', () {
-          _showStickerPicker();
-        }),
-        const Text('點選圖層即可編輯',
-            style: TextStyle(color: Colors.white70, fontSize: 12)),
+        _tbBtn(Icons.add_circle_outline, '新增貼圖', () => _showStickerPicker()),
+        const Expanded(
+          child: Center(
+            child: Text('點選圖層即可編輯',
+                style: TextStyle(color: Colors.white60, fontSize: 12)),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _toolbarButton(IconData icon, String label, VoidCallback onTap,
+  Widget _buildSelectedToolbar(_EditorLayer layer) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          _tbBtn(Icons.photo_library_outlined, '更換', () => _showImagePicker(layer)),
+          const SizedBox(width: 8),
+          if (layer.kind == _LayerKind.table) ...[
+            _tbBtn(Icons.text_fields, '文字', () => _showTextSettings(layer)),
+            const SizedBox(width: 8),
+            _tbBtn(Icons.tune, '進階', () => _showAdvancedSettings(layer)),
+            const SizedBox(width: 8),
+          ],
+          if (layer.kind == _LayerKind.sticker) ...[
+            _tbBtn(Icons.opacity, '透明度', () => _showStickerOpacity(layer)),
+            const SizedBox(width: 8),
+            _tbBtn(Icons.delete_outline, '刪除', () {
+              setState(() {
+                _pushUndo();
+                _layers.removeWhere((l) => l.id == layer.id);
+                _selectedId = null;
+              });
+            }, color: Colors.redAccent),
+            const SizedBox(width: 8),
+          ],
+          _tbBtn(Icons.check, '完成',
+              () => setState(() => _selectedId = null)),
+        ],
+      ),
+    );
+  }
+
+  Widget _tbBtn(IconData icon, String label, VoidCallback onTap,
       {Color color = Colors.white}) {
     return GestureDetector(
       onTap: onTap,
@@ -923,48 +827,42 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     );
   }
 
+  // ─────────────── Sheets ───────────────
+
   void _showImagePicker(_EditorLayer layer) {
+    if (layer.sourceUrls.isEmpty) return;
     showModalBottomSheet(
       context: context,
-      builder: (_) {
-        return GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: layer.sourceUrls.length,
-          itemBuilder: (context, i) {
-            final url = layer.sourceUrls[i];
-            return GestureDetector(
-              onTap: () {
-                Navigator.pop(context);
-                _switchLayerImage(layer.id, url);
-              },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.network(url, fit: BoxFit.cover),
-                    if (i == layer.sourceIndex)
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                                color: Colors.blue, width: 3),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
+      builder: (_) => GridView.builder(
+        padding: const EdgeInsets.all(12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
+        ),
+        itemCount: layer.sourceUrls.length,
+        itemBuilder: (_, i) {
+          return GestureDetector(
+            onTap: () {
+              Navigator.pop(context);
+              _switchLayerImage(layer.id, layer.sourceUrls[i]);
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(fit: StackFit.expand, children: [
+                Image.network(layer.sourceUrls[i], fit: BoxFit.cover),
+                if (i == layer.sourceIndex)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blue, width: 3),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+                    ),
+                  ),
+              ]),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -977,91 +875,244 @@ class _WallpaperEditorScreenState extends State<WallpaperEditorScreen> {
     }
     showModalBottomSheet(
       context: context,
-      builder: (_) {
-        return GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
+      builder: (_) => GridView.builder(
+        padding: const EdgeInsets.all(12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
+        ),
+        itemCount: stickers.length,
+        itemBuilder: (_, i) => GestureDetector(
+          onTap: () { Navigator.pop(context); _addStickerFromUrl(stickers[i]); },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(stickers[i], fit: BoxFit.contain),
           ),
-          itemCount: stickers.length,
-          itemBuilder: (context, i) {
-            return GestureDetector(
-              onTap: () {
-                Navigator.pop(context);
-                _addStickerFromUrl(stickers[i]);
-              },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(stickers[i], fit: BoxFit.contain),
-              ),
-            );
-          },
-        );
-      },
+        ),
+      ),
     );
   }
 
-  void _showOpacityDialog(_EditorLayer layer) {
-    double currentOpacity = layer.tableOpacity;
-    showDialog(
+  void _showTextSettings(_EditorLayer layer) {
+    final i = _idx(layer.id);
+    if (i < 0) return;
+    double fontSize = layer.baseFontSize;
+    String colorHex = layer.fontColorHex;
+
+    const presetColors = [
+      '#000000', '#FFFFFF', '#FF0000', '#FF6600',
+      '#FFCC00', '#00AA00', '#0066FF', '#9900CC',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(
+              left: 20, right: 20, top: 20,
+              bottom: 20 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Text('文字設定',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _layers[_idx(layer.id)]
+                        ..baseFontSize = fontSize
+                        ..fontColorHex = colorHex;
+                    });
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('完成'),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              const Text('字體大小',
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              Row(children: [
+                Expanded(
+                  child: Slider(
+                    value: fontSize.clamp(3.0, 24.0),
+                    min: 3, max: 24, divisions: 21,
+                    onChanged: (v) => setSheet(() => fontSize = v),
+                  ),
+                ),
+                SizedBox(
+                  width: 32,
+                  child: Text('${fontSize.round()}',
+                      textAlign: TextAlign.right),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              const Text('字體顏色',
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10, runSpacing: 10,
+                children: presetColors.map((hex) {
+                  final selected = colorHex.toUpperCase() == hex.toUpperCase();
+                  return GestureDetector(
+                    onTap: () => setSheet(() => colorHex = hex),
+                    child: Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                        color: _hexToColor(hex),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected ? Colors.blue : Colors.grey.shade400,
+                          width: selected ? 3 : 1,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAdvancedSettings(_EditorLayer layer) {
+    final tpl = widget.template;
+    final availablePeriods = tpl.images.table.keys
+        .map(int.tryParse)
+        .whereType<int>()
+        .toList()
+      ..sort();
+    double opacity = layer.tableOpacity;
+    int currentPeriods = layer.rows;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(
+              left: 20, right: 20, top: 20,
+              bottom: 20 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Text('進階設定',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      final i = _idx(layer.id);
+                      if (i >= 0) _layers[i].tableOpacity = opacity;
+                    });
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('完成'),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              const Text('課表透明度',
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              Row(children: [
+                Expanded(
+                  child: Slider(
+                    value: opacity,
+                    min: 0, max: 1, divisions: 20,
+                    label: '${(opacity * 100).round()}%',
+                    onChanged: (v) {
+                      setSheet(() => opacity = v);
+                      setState(() {
+                        final i = _idx(layer.id);
+                        if (i >= 0) _layers[i].tableOpacity = v;
+                      });
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 44,
+                  child: Text('${(opacity * 100).round()}%',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontSize: 12)),
+                ),
+              ]),
+              if (availablePeriods.length > 1) ...[
+                const SizedBox(height: 12),
+                const Text('節數', style: TextStyle(fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: availablePeriods.map((p) {
+                    final sel = p == currentPeriods;
+                    return ChoiceChip(
+                      label: Text('$p 節'),
+                      selected: sel,
+                      onSelected: (_) {
+                        setSheet(() => currentPeriods = p);
+                        Navigator.pop(ctx);
+                        _switchPeriodCount(layer.id, p);
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showStickerOpacity(_EditorLayer layer) {
+    double opacity = 1.0;
+    showModalBottomSheet(
       context: context,
       builder: (_) => StatefulBuilder(
-        builder: (context, setDlgState) => AlertDialog(
-          title: const Text('課表透明度'),
-          content: Slider(
-            value: currentOpacity,
-            min: 0,
-            max: 1,
-            divisions: 20,
-            label: '${(currentOpacity * 100).round()}%',
-            onChanged: (v) {
-              setDlgState(() => currentOpacity = v);
-              setState(() {
-                final i = _layerIndex(layer.id);
-                if (i >= 0) {
-                  final old = _layers[i];
-                  _layers[i] = _EditorLayer(
-                    id: old.id,
-                    kind: old.kind,
-                    imageBytes: old.imageBytes,
-                    naturalWidth: old.naturalWidth,
-                    naturalHeight: old.naturalHeight,
-                    sourceUrls: old.sourceUrls,
-                    sourceIndex: old.sourceIndex,
-                    center: old.center,
-                    size: old.size,
-                    rotation: old.rotation,
-                    subjects: old.subjects,
-                    rows: old.rows,
-                    baseFontSize: old.baseFontSize,
-                    fontColorHex: old.fontColorHex,
-                    tableOpacity: v,
-                    tableConfig: old.tableConfig,
-                  );
-                }
-              });
-            },
+        builder: (ctx, setSheet) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('貼圖透明度',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+              Row(children: [
+                Expanded(
+                  child: Slider(
+                    value: opacity, min: 0, max: 1, divisions: 20,
+                    label: '${(opacity * 100).round()}%',
+                    onChanged: (v) => setSheet(() => opacity = v),
+                  ),
+                ),
+                SizedBox(
+                  width: 44,
+                  child: Text('${(opacity * 100).round()}%',
+                      textAlign: TextAlign.right),
+                ),
+              ]),
+              FilledButton(
+                onPressed: () { Navigator.pop(ctx); },
+                child: const Text('完成'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('完成')),
-          ],
         ),
       ),
     );
   }
 }
 
-// ─────────────────────────── Helpers ───────────────────────────
+// ─────────────── Util ───────────────
 
 Color _hexToColor(String hex) {
   var h = hex.trim().replaceFirst('#', '');
   if (h.length == 6) h = 'FF$h';
-  if (h.length == 8) {
-    return Color(int.parse(h, radix: 16));
-  }
+  if (h.length == 8) return Color(int.parse(h, radix: 16));
   return Colors.black;
 }
