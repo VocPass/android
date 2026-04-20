@@ -252,6 +252,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: const Icon(Icons.open_in_new, size: 16, color: Colors.grey),
                   onTap: () => _openUrl('https://VocPass.com'),
                 ),
+                ListTile(
+                  leading: const Icon(Icons.discord, color: Color(0xFF5865F2)),
+                  title: const Text('Discord'),
+                  trailing: const Icon(Icons.open_in_new, size: 16, color: Colors.grey),
+                  onTap: () => _openUrl('https://dc.vocpass.com'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.forum_outlined),
+                  title: const Text('論壇'),
+                  trailing: const Icon(Icons.open_in_new, size: 16, color: Colors.grey),
+                  onTap: () => _openUrl('https://forum.vocpass.com'),
+                ),
               ],
             ),
           ),

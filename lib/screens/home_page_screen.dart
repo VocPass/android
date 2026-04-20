@@ -7,6 +7,7 @@ import '../services/vocpass_auth_service.dart';
 import 'following_screen.dart';
 import 'restaurant_screen.dart';
 import 'w2m/w2m_list_screen.dart';
+import 'wallpaper/wallpaper_template_list_screen.dart';
 
 /// 首頁 - 對應 iOS 的 HomePageView
 class HomePageScreen extends StatelessWidget {
@@ -69,6 +70,33 @@ class HomePageScreen extends StatelessWidget {
 
               const SizedBox(height: 32),
 
+              // 出來玩
+              _HomeButton(
+                icon: Icons.calendar_month,
+                label: '出來玩',
+                color: Colors.purple,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const W2MListScreen()),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 課表產生器
+              _HomeButton(
+                icon: Icons.wallpaper,
+                label: '課表產生器',
+                color: Colors.teal,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const WallpaperTemplateListScreen()),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
               // 吃啥？
               _HomeButton(
                 icon: Icons.restaurant,
@@ -90,19 +118,6 @@ class HomePageScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const FollowingListScreen()),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // 出來玩
-              _HomeButton(
-                icon: Icons.calendar_month,
-                label: '出來玩',
-                color: Colors.purple,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const W2MListScreen()),
                 ),
               ),
 
