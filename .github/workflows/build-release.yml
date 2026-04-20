@@ -48,7 +48,7 @@ jobs:
       - name: Build release APK
         run: |
           flutter build apk --release
-          mv build/app/outputs/flutter-apk/vocpass.apk build/app/outputs/flutter-apk/vocpass.apk
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/vocpass.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
