@@ -70,7 +70,13 @@ class NotificationTokenService {
     try {
       final messaging = await _getMessagingIfReady();
       if (messaging == null) return;
-      await messaging.requestPermission();
+      final settings = await messaging.requestPermission();
+      if (kDebugMode) {
+        print(
+          '[NotifyToken] permission status=${settings.authorizationStatus.name} '
+          'alert=${settings.alert} badge=${settings.badge} sound=${settings.sound}',
+        );
+      }
     } catch (e) {
       if (kDebugMode) {
         print('[NotifyToken] requestPermission failed: $e');
@@ -99,22 +105,28 @@ class NotificationTokenService {
       if (fcmToken == null) {
         try {
           final messaging = await _getMessagingIfReady();
+          if (messaging == null && kDebugMode) {
+            print('[NotifyToken] getToken skipped ($reason): Firebase unavailable');
+          }
           fcmToken = await messaging?.getToken();
         } catch (e) {
           if (kDebugMode) {
             print('[NotifyToken] getToken failed ($reason): $e');
+            print('[NotifyToken] getToken diagnosis: ${_diagnoseTokenError(e)}');
           }
         }
       }
 
+      if (kDebugMode && (fcmToken == null || fcmToken.isEmpty)) {
+        print('[NotifyToken] fcm token is empty ($reason), fallback upload with SSAID only');
+      }
+
       final payload = <String, dynamic>{
         'device_token': deviceToken,
+        'fcm_token': fcmToken ?? '',
         'is_open': true,
         'valid': true,
       };
-      if (fcmToken != null && fcmToken.isNotEmpty) {
-        payload['fcm_token'] = fcmToken;
-      }
 
       final headers = <String, String>{
         'Accept': 'application/json',
@@ -123,6 +135,9 @@ class NotificationTokenService {
 
       // Logged-in users include Authorization; guests upload without it.
       VocPassAuthService.instance.applyAuthHeader(headers);
+      if (kDebugMode) {
+        print('[NotifyToken] upload context ($reason): hasAuthorization=${VocPassAuthService.instance.hasToken}');
+      }
 
       final uri = Uri.parse('${AppConfig.vocPassApiHost}/api/user/notify/android');
       final response = await http.post(
@@ -146,5 +161,19 @@ class NotificationTokenService {
     await _tokenRefreshSub?.cancel();
     _tokenRefreshSub = null;
     _initialized = false;
+  }
+
+  String _diagnoseTokenError(Object error) {
+    final text = error.toString().toUpperCase();
+    if (text.contains('FIS_AUTH_ERROR') || text.contains('AUTHENTICATION_FAILED')) {
+      return 'Firebase Installations 驗證失敗。常見原因: 模擬器 Play 服務狀態異常、Google 帳號未登入、網路或時間不同步、API key 限制不匹配。';
+    }
+    if (text.contains('SERVICE_UNAVAILABLE')) {
+      return 'Firebase 服務暫時不可用，可稍後重試。';
+    }
+    if (text.contains('MISSING_INSTANCEID_SERVICE')) {
+      return '裝置缺少 Google Play Services，FCM 無法工作。';
+    }
+    return '未知錯誤，請先確認 google-services.json、Play Services、網路與時間設定。';
   }
 }
