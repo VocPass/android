@@ -56,7 +56,7 @@ class NotificationTokenService {
 
   Future<void> syncDynamicNotifyConfig({
     required bool isOpen,
-    List<Map<String, dynamic>>? curriculum,
+    Map<String, dynamic>? curriculum,
     String reason = 'dynamic_notify_sync',
   }) {
     return _uploadToken(
@@ -73,11 +73,71 @@ class NotificationTokenService {
     return _uploadToken(
       reason: reason,
       isOpenOverride: isOpenOverride,
-      curriculumOverride: buildCurriculumJsonFromCache(),
+      curriculumOverride: buildRawCurriculumJsonFromCache(),
     );
   }
 
-  List<Map<String, dynamic>> buildCurriculumJsonFromCache() {
+  Map<String, dynamic> buildRawCurriculumJsonFromCache() {
+    final entries = _buildEffectiveClassEntries();
+    final grouped = <String, List<Map<String, dynamic>>>{};
+
+    for (final entry in entries) {
+      final subject = (entry['subject'] ?? '').toString().trim();
+      if (subject.isEmpty) continue;
+
+      final scheduleItem = <String, dynamic>{
+        'weekday': (entry['weekday'] ?? '').toString(),
+        'period': (entry['period'] ?? '').toString(),
+      };
+
+      final start = (entry['startTime'] ?? '').toString();
+      final end = (entry['endTime'] ?? '').toString();
+      final room = (entry['room'] ?? '').toString();
+      final teacher = (entry['teacher'] ?? '').toString();
+
+      if (start.isNotEmpty) scheduleItem['start'] = start;
+      if (end.isNotEmpty) scheduleItem['end'] = end;
+      if (room.isNotEmpty) scheduleItem['room'] = room;
+      if (teacher.isNotEmpty) scheduleItem['teacher'] = teacher;
+
+      grouped.putIfAbsent(subject, () => <Map<String, dynamic>>[]).add(scheduleItem);
+    }
+
+    final subjectKeys = grouped.keys.toList()..sort();
+    final payload = <String, dynamic>{};
+
+    for (final subject in subjectKeys) {
+      final schedules = grouped[subject]!
+        ..sort((a, b) {
+          final weekdayCompare = _weekdayOrder(a['weekday'].toString())
+              .compareTo(_weekdayOrder(b['weekday'].toString()));
+          if (weekdayCompare != 0) return weekdayCompare;
+          return _periodOrder(a['period'].toString())
+              .compareTo(_periodOrder(b['period'].toString()));
+        });
+
+      payload[subject] = {
+        'count': schedules.length,
+        'schedule': schedules,
+      };
+    }
+
+    return payload;
+  }
+
+  List<Map<String, dynamic>> buildDynamicClassListFromCache() {
+    final entries = _buildEffectiveClassEntries();
+    return entries
+      ..sort((a, b) {
+        final weekdayCompare = _weekdayOrder(a['weekday'].toString())
+            .compareTo(_weekdayOrder(b['weekday'].toString()));
+        if (weekdayCompare != 0) return weekdayCompare;
+        return _periodOrder(a['period'].toString())
+            .compareTo(_periodOrder(b['period'].toString()));
+      });
+  }
+
+  List<Map<String, dynamic>> _buildEffectiveClassEntries() {
     final cache = CacheService.instance;
     final cachedTimetable = cache.getCachedTimetable();
     final curriculum = cachedTimetable?.curriculum ?? const <String, CourseInfo>{};
@@ -132,14 +192,6 @@ class NotificationTokenService {
       });
     }
 
-    result.sort((a, b) {
-      final weekdayCompare = _weekdayOrder(a['weekday'].toString())
-          .compareTo(_weekdayOrder(b['weekday'].toString()));
-      if (weekdayCompare != 0) return weekdayCompare;
-      return _periodOrder(a['period'].toString())
-          .compareTo(_periodOrder(b['period'].toString()));
-    });
-
     return result;
   }
 
@@ -186,7 +238,7 @@ class NotificationTokenService {
     String? fcmTokenOverride,
     required String reason,
     bool? isOpenOverride,
-    List<Map<String, dynamic>>? curriculumOverride,
+    Map<String, dynamic>? curriculumOverride,
   }) async {
     try {
       final deviceToken = await _androidId.getId();
@@ -218,7 +270,7 @@ class NotificationTokenService {
       }
 
       final isOpen = isOpenOverride ?? CacheService.instance.autoStartDynamicIsland;
-      final curriculum = curriculumOverride ?? buildCurriculumJsonFromCache();
+      final curriculum = curriculumOverride ?? buildRawCurriculumJsonFromCache();
 
       final payload = <String, dynamic>{
         'device_token': deviceToken,

@@ -1,8 +1,9 @@
-import 'dart:convert';
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
+
+import 'notification_token_service.dart';
 
 class DynamicIslandService {
   DynamicIslandService._internal();
@@ -10,7 +11,6 @@ class DynamicIslandService {
   static final DynamicIslandService instance = DynamicIslandService._internal();
 
   static const MethodChannel _channel = MethodChannel('vocpass/dynamic_island');
-  static const String _defaultAssetPath = 'a.json';
 
   Timer? _timer;
   List<_ClassItem> _classes = const [];
@@ -27,10 +27,10 @@ class DynamicIslandService {
     }
   }
 
-  Future<void> startClassStatusSync({String assetPath = _defaultAssetPath}) async {
+  Future<void> startClassStatusSync() async {
     if (!Platform.isAndroid) return;
 
-    await _loadClassItems(assetPath);
+    _classes = _loadClassItemsFromCurriculum();
     _timer?.cancel();
 
     if (_classes.isEmpty) {
@@ -59,25 +59,8 @@ class DynamicIslandService {
     }
   }
 
-  Future<void> _loadClassItems(String assetPath) async {
-    try {
-      final raw = await rootBundle.loadString(assetPath);
-      final json = jsonDecode(raw);
-      if (json is! List) {
-        _classes = const [];
-        return;
-      }
-      _classes = json
-          .whereType<Map>()
-          .map((e) => _ClassItem.fromJson(e.cast<String, dynamic>()))
-          .toList()
-        ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
-    } catch (_) {
-      _classes = const [];
-    }
-  }
-
   Future<void> _updateClassStatusNotification() async {
+    _classes = _loadClassItemsFromCurriculum();
     if (_classes.isEmpty) {
       await cancelClassStatusNotification();
       return;
@@ -155,6 +138,45 @@ class DynamicIslandService {
     final minutes = (totalSeconds % 3600) ~/ 60;
     final seconds = totalSeconds % 60;
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  List<_ClassItem> _loadClassItemsFromCurriculum() {
+    final items = NotificationTokenService.instance.buildDynamicClassListFromCache();
+    final todayWeekday = _weekdayToZh(DateTime.now().weekday);
+
+    final result = items
+        .where((e) {
+          final weekday = (e['weekday'] ?? '').toString();
+          // If weekday is provided, only keep today's classes.
+          if (weekday.isNotEmpty) return weekday == todayWeekday;
+          return true;
+        })
+        .map((e) => _ClassItem.fromJson(e))
+        .toList()
+      ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+
+    return result;
+  }
+
+  String _weekdayToZh(int weekday) {
+    switch (weekday) {
+      case DateTime.monday:
+        return '一';
+      case DateTime.tuesday:
+        return '二';
+      case DateTime.wednesday:
+        return '三';
+      case DateTime.thursday:
+        return '四';
+      case DateTime.friday:
+        return '五';
+      case DateTime.saturday:
+        return '六';
+      case DateTime.sunday:
+        return '日';
+      default:
+        return '';
+    }
   }
 }
 
