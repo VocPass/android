@@ -95,15 +95,26 @@ class NotificationTokenService {
         return;
       }
 
-      final messaging = await _getMessagingIfReady();
-      final fcmToken = fcmTokenOverride ?? await messaging?.getToken();
+      String? fcmToken = fcmTokenOverride;
+      if (fcmToken == null) {
+        try {
+          final messaging = await _getMessagingIfReady();
+          fcmToken = await messaging?.getToken();
+        } catch (e) {
+          if (kDebugMode) {
+            print('[NotifyToken] getToken failed ($reason): $e');
+          }
+        }
+      }
 
       final payload = <String, dynamic>{
         'device_token': deviceToken,
-        'fcm_token': fcmToken,
         'is_open': true,
         'valid': true,
       };
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        payload['fcm_token'] = fcmToken;
+      }
 
       final headers = <String, String>{
         'Accept': 'application/json',
