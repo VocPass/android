@@ -8,10 +8,12 @@ import 'services/dynamic_island_service.dart';
 import 'services/notification_token_service.dart';
 import 'services/school_config_manager.dart';
 import 'services/vocpass_auth_service.dart';
+import 'services/widget_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await CacheService.instance.init();
+  await WidgetService.init();
   await SchoolConfigManager.instance.init();
   await VocPassAuthService.instance.init();
   final isGuest = SchoolConfigManager.instance.selectedSchool?.isGuest == true;

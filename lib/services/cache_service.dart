@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/models.dart';
+import 'widget_service.dart';
 
 class CacheService extends ChangeNotifier {
   static final CacheService instance = CacheService._internal();
@@ -139,6 +140,7 @@ class CacheService extends ChangeNotifier {
   void cacheTimetable(TimetableData timetable) {
     prefs.setString('cached_timetable', timetable.toJsonString());
     _setTimestamp('cached_timetable_timestamp');
+    WidgetService.updateScheduleWidget();
   }
 
   void clearTimetableCache() {
@@ -265,6 +267,7 @@ class CacheService extends ChangeNotifier {
   set manualCurriculum(Map<String, String> value) {
     prefs.setString('manual_curriculum', jsonEncode(value));
     notifyListeners();
+    WidgetService.updateScheduleWidget();
   }
 
   // 手動教室/教師覆寫
@@ -288,6 +291,7 @@ class CacheService extends ChangeNotifier {
         jsonEncode(
             value.map((k, v) => MapEntry(k, v.toJson()))));
     notifyListeners();
+    WidgetService.updateScheduleWidget();
   }
 
   // 手動節次時間覆寫
