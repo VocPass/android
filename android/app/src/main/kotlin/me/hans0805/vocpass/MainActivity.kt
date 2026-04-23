@@ -33,6 +33,10 @@ class MainActivity : FlutterFragmentActivity() {
       .setMethodCallHandler { call, result ->
         when (call.method) {
           "isSupported" -> result.success(isDynamicIslandSupported())
+          "showOngoingPlaceholderNotification" -> {
+            showOngoingPlaceholderNotification()
+            result.success(null)
+          }
           "showClassStatusNotification" -> {
             val args = call.arguments as? Map<*, *>
             if (args == null) {
@@ -140,6 +144,34 @@ class MainActivity : FlutterFragmentActivity() {
       .setStyle(NotificationCompat.DecoratedCustomViewStyle())
       .setCustomContentView(smallRemoteViews)
       .setCustomBigContentView(bigRemoteViews)
+      .setPriority(NotificationCompat.PRIORITY_LOW)
+      .setOnlyAlertOnce(true)
+      .setOngoing(true)
+      .setAutoCancel(false)
+      .setContentIntent(pendingIntent)
+      .build()
+
+    val notificationManager =
+      getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    notificationManager.notify(CLASS_STATUS_NOTIFICATION_ID, notification)
+  }
+
+  private fun showOngoingPlaceholderNotification() {
+    val launchIntent = Intent(this, MainActivity::class.java).apply {
+      flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+    }
+
+    val pendingIntent = PendingIntent.getActivity(
+      this,
+      0,
+      launchIntent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    val notification = NotificationCompat.Builder(this, CLASS_STATUS_CHANNEL_ID)
+      .setSmallIcon(R.mipmap.launcher_icon)
+      .setContentTitle("課程動態")
+      .setContentText("通知已啟用，正在載入課程資料...")
       .setPriority(NotificationCompat.PRIORITY_LOW)
       .setOnlyAlertOnce(true)
       .setOngoing(true)

@@ -162,6 +162,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 cache.autoStartDynamicIsland = value;
 
                 if (value) {
+                  await DynamicIslandService.instance.showOngoingPlaceholderNotification();
                   await DynamicIslandService.instance.startClassStatusSync();
                 } else {
                   await DynamicIslandService.instance.stopClassStatusSync();

@@ -59,6 +59,15 @@ class DynamicIslandService {
     }
   }
 
+  Future<void> showOngoingPlaceholderNotification() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('showOngoingPlaceholderNotification');
+    } on PlatformException {
+      // Ignore runtime errors to keep app stable.
+    }
+  }
+
   Future<void> _updateClassStatusNotification() async {
     _classes = _loadClassItemsFromCurriculum();
     if (_classes.isEmpty) {

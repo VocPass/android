@@ -11,6 +11,10 @@ import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.Calendar
+import java.util.Locale
 
 class VocPassFirebaseMessagingService : FirebaseMessagingService() {
   companion object {
@@ -22,22 +26,125 @@ class VocPassFirebaseMessagingService : FirebaseMessagingService() {
     val data = message.data
     if (data.isEmpty()) return
 
-    val currentLabel = data["currentLabel"] ?: return
-    val currentTime = data["currentTime"] ?: "--:-- ~ --:--"
-    val currentCountdown = data["currentCountdown"] ?: "--:--:--"
-    val nextLabel = data["nextLabel"] ?: "下節課：無"
-    val nextTime = data["nextTime"] ?: "--:-- ~ --:--"
-    val nextCountdown = data["nextCountdown"] ?: "--:--:--"
+    val curriculumStr = data["curriculum"] ?: return
+    try {
+        val classStatus = parseCurriculumToClassStatus(curriculumStr)
+        createClassStatusChannel()
+        showClassStatusNotification(
+            currentLabel = classStatus["currentLabel"] ?: "目前無上課",
+            currentTime = classStatus["currentTime"] ?: "--:-- ~ --:--",
+            currentCountdown = classStatus["currentCountdown"] ?: "00:00:00",
+            nextLabel = classStatus["nextLabel"] ?: "下節課：無",
+            nextTime = classStatus["nextTime"] ?: "--:-- ~ --:--",
+            nextCountdown = classStatus["nextCountdown"] ?: "00:00:00",
+        )
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+  }
 
-    createClassStatusChannel()
-    showClassStatusNotification(
-      currentLabel = currentLabel,
-      currentTime = currentTime,
-      currentCountdown = currentCountdown,
-      nextLabel = nextLabel,
-      nextTime = nextTime,
-      nextCountdown = nextCountdown,
-    )
+  private fun parseMinutes(timeStr: String): Int {
+      try {
+          val parts = timeStr.split(":")
+          if (parts.size >= 2) {
+              return parts[0].toInt() * 60 + parts[1].toInt()
+          }
+      } catch (e: Exception) {}
+      return 0
+  }
+
+  private fun formatCountdown(totalSeconds: Int): String {
+      val safeSeconds = kotlin.math.max(totalSeconds, 0)
+      val hours = safeSeconds / 3600
+      val minutes = (safeSeconds % 3600) / 60
+      val seconds = safeSeconds % 60
+      return String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
+  }
+
+  private fun parseCurriculumToClassStatus(jsonStr: String): Map<String, String> {
+      val array = JSONArray(jsonStr)
+      val classes = mutableListOf<JSONObject>()
+      for (i in 0 until array.length()) {
+          val item = array.optJSONObject(i)
+          if (item != null) {
+              classes.add(item)
+          }
+      }
+
+      classes.sortBy { parseMinutes(it.optString("startTime", "")) }
+
+      val cal = Calendar.getInstance()
+      val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+      val nowSeconds = cal.get(Calendar.SECOND)
+
+      var current: JSONObject? = null
+      var nextClass: JSONObject? = null
+
+      for (item in classes) {
+          val startM = parseMinutes(item.optString("startTime", ""))
+          val endM = parseMinutes(item.optString("endTime", ""))
+
+          val startsBeforeNow = startM < nowMinutes || (startM == nowMinutes && nowSeconds >= 0)
+          val endsAfterNow = endM > nowMinutes || (endM == nowMinutes && nowSeconds == 0)
+
+          if (startsBeforeNow && endsAfterNow) {
+              current = item
+              continue
+          }
+
+          if (startM > nowMinutes || (startM == nowMinutes && nowSeconds == 0)) {
+              nextClass = item
+              break
+          }
+      }
+
+      val result = mutableMapOf<String, String>()
+
+      if (current != null) {
+          val period = current.optString("period", "").trim()
+          val subject = current.optString("subject", "").trim()
+          val room = current.optString("room", "").trim()
+          val startTime = current.optString("startTime", "").trim()
+          val endTime = current.optString("endTime", "").trim()
+
+          result["currentLabel"] = "$period $subject ($room)"
+          result["currentTime"] = "$startTime ~ $endTime"
+
+          val endCal = Calendar.getInstance()
+          val endM = parseMinutes(endTime)
+          endCal.set(Calendar.HOUR_OF_DAY, endM / 60)
+          endCal.set(Calendar.MINUTE, endM % 60)
+          endCal.set(Calendar.SECOND, 0)
+          result["currentCountdown"] = formatCountdown(((endCal.timeInMillis - cal.timeInMillis) / 1000).toInt())
+      } else {
+          result["currentLabel"] = "目前無上課"
+          result["currentTime"] = "--:-- ~ --:--"
+          result["currentCountdown"] = "00:00:00"
+      }
+
+      if (nextClass != null) {
+          val period = nextClass.optString("period", "").trim()
+          val subject = nextClass.optString("subject", "").trim()
+          val room = nextClass.optString("room", "").trim()
+          val startTime = nextClass.optString("startTime", "").trim()
+          val endTime = nextClass.optString("endTime", "").trim()
+
+          result["nextLabel"] = "$period $subject ($room)"
+          result["nextTime"] = "$startTime ~ $endTime"
+
+          val startCal = Calendar.getInstance()
+          val startM = parseMinutes(startTime)
+          startCal.set(Calendar.HOUR_OF_DAY, startM / 60)
+          startCal.set(Calendar.MINUTE, startM % 60)
+          startCal.set(Calendar.SECOND, 0)
+          result["nextCountdown"] = formatCountdown(((startCal.timeInMillis - cal.timeInMillis) / 1000).toInt())
+      } else {
+          result["nextLabel"] = "下節課：無"
+          result["nextTime"] = "--:-- ~ --:--"
+          result["nextCountdown"] = "00:00:00"
+      }
+
+      return result
   }
 
   private fun createClassStatusChannel() {
