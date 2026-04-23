@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'app.dart';
 import 'services/api_service.dart';
 import 'services/cache_service.dart';
+import 'services/notification_token_service.dart';
 import 'services/school_config_manager.dart';
 import 'services/vocpass_auth_service.dart';
 
@@ -16,6 +17,7 @@ Future<void> main() async {
   if (!isGuest) {
     await VocPassAuthService.instance.restoreSession();
   }
+  await NotificationTokenService.instance.init();
   runApp(
     MultiProvider(
       providers: [

@@ -9,6 +9,7 @@ import 'screens/main_tab_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/school_selection_screen.dart';
 import 'services/cache_service.dart';
+import 'services/notification_token_service.dart';
 import 'services/school_config_manager.dart';
 import 'services/vocpass_auth_service.dart';
 import 'theme/app_theme.dart';
@@ -72,9 +73,14 @@ class _RootRouterState extends State<RootRouter> {
       final token = uri.queryParameters['token'];
       if (token != null && token.isNotEmpty) {
         if (kDebugMode) print('[DeepLink] Got token, logging in...');
-        VocPassAuthService.instance.handleTokenLogin(token);
+        unawaited(_handleTokenLoginAndSyncNotify(token));
       }
     }
+  }
+
+  Future<void> _handleTokenLoginAndSyncNotify(String token) async {
+    await VocPassAuthService.instance.handleTokenLogin(token);
+    await NotificationTokenService.instance.uploadNow();
   }
 
   @override

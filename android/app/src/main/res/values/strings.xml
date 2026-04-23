@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="push_channel_name">VocPass 通知</string>
+    <string name="push_channel_description">課務與系統提醒通知</string>
+    <string name="push_channel_id">vocpass_push</string>
+</resources>

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "168884166205",
+    "project_id": "vocpass-6258b",
+    "storage_bucket": "vocpass-6258b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:168884166205:android:513c66f769a5d2a21d9454",
+        "android_client_info": {
+          "package_name": "me.hans0805.vocpass"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFAImpcBEayXyEOwvBfCWDY9udyOzNjTk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
