@@ -40,7 +40,7 @@ class _SchoolSelectionScreenState extends State<SchoolSelectionScreen> {
   }
 
   Future<void> _openApplyForm() async {
-    final uri = Uri.parse('https://forms.gle/t145dao5K2DHkxa2A');
+    final uri = Uri.parse('https://vocpass.com/apply');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }

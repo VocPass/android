@@ -18,6 +18,7 @@ class NotificationTokenService {
 
   bool _initialized = false;
   StreamSubscription<String>? _tokenRefreshSub;
+  Timer? _startupRetryTimer;
 
   Future<void> init() async {
     if (_initialized) return;
@@ -27,49 +28,61 @@ class NotificationTokenService {
       return;
     }
 
-    final firebaseReady = await _ensureFirebaseReady();
-    if (!firebaseReady) return;
-
-    final messaging = FirebaseMessaging.instance;
-
-    try {
-      await messaging.requestPermission();
-    } catch (e) {
-      if (kDebugMode) {
-        print('[NotifyToken] requestPermission failed: $e');
-      }
-    }
+    await _requestPermissionIfPossible();
 
     await uploadNow();
+    _scheduleStartupRetry();
 
-    _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen(
-      (token) {
-        unawaited(_uploadToken(fcmTokenOverride: token, reason: 'token_refresh'));
-      },
-      onError: (Object e) {
-        if (kDebugMode) {
-          print('[NotifyToken] onTokenRefresh error: $e');
-        }
-      },
-    );
+    final messaging = await _getMessagingIfReady();
+    if (messaging != null) {
+      _tokenRefreshSub = messaging.onTokenRefresh.listen(
+        (token) {
+          unawaited(_uploadToken(fcmTokenOverride: token, reason: 'token_refresh'));
+        },
+        onError: (Object e) {
+          if (kDebugMode) {
+            print('[NotifyToken] onTokenRefresh error: $e');
+          }
+        },
+      );
+    }
   }
 
   Future<void> uploadNow() {
     return _uploadToken(reason: 'app_open_or_manual');
   }
 
-  Future<bool> _ensureFirebaseReady() async {
+  Future<FirebaseMessaging?> _getMessagingIfReady() async {
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
-      return true;
+      return FirebaseMessaging.instance;
     } catch (e) {
       if (kDebugMode) {
-        print('[NotifyToken] Firebase init skipped: $e');
+        print('[NotifyToken] Firebase init unavailable: $e');
       }
-      return false;
+      return null;
     }
+  }
+
+  Future<void> _requestPermissionIfPossible() async {
+    try {
+      final messaging = await _getMessagingIfReady();
+      if (messaging == null) return;
+      await messaging.requestPermission();
+    } catch (e) {
+      if (kDebugMode) {
+        print('[NotifyToken] requestPermission failed: $e');
+      }
+    }
+  }
+
+  void _scheduleStartupRetry() {
+    _startupRetryTimer?.cancel();
+    _startupRetryTimer = Timer(const Duration(seconds: 8), () {
+      unawaited(_uploadToken(reason: 'startup_retry'));
+    });
   }
 
   Future<void> _uploadToken({String? fcmTokenOverride, required String reason}) async {
@@ -82,8 +95,8 @@ class NotificationTokenService {
         return;
       }
 
-      final messaging = FirebaseMessaging.instance;
-      final fcmToken = fcmTokenOverride ?? await messaging.getToken();
+      final messaging = await _getMessagingIfReady();
+      final fcmToken = fcmTokenOverride ?? await messaging?.getToken();
 
       final payload = <String, dynamic>{
         'device_token': deviceToken,
@@ -108,7 +121,7 @@ class NotificationTokenService {
       );
 
       if (kDebugMode) {
-        print('[NotifyToken] upload ($reason) status=${response.statusCode}');
+        print('[NotifyToken] upload ($reason) status=${response.statusCode} body=${response.body}');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -118,6 +131,7 @@ class NotificationTokenService {
   }
 
   Future<void> dispose() async {
+    _startupRetryTimer?.cancel();
     await _tokenRefreshSub?.cancel();
     _tokenRefreshSub = null;
     _initialized = false;
