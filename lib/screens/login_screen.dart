@@ -592,6 +592,8 @@ document.addEventListener('submit', function(e) {
     final apiService = context.read<ApiService>();
     apiService.setCookies(mapped);
     apiService.markLoggedIn();
+
+    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _recognizeCaptcha(String selector) async {
