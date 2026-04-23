@@ -14,6 +14,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await CacheService.instance.init();
   await WidgetService.init();
+  await WidgetService.updateScheduleWidget(); // 每次啟動都更新小工具（使用快取）
+
   await SchoolConfigManager.instance.init();
   await VocPassAuthService.instance.init();
   final isGuest = SchoolConfigManager.instance.selectedSchool?.isGuest == true;
