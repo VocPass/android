@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/big_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="課程動態"
+        android:textStyle="bold"
+        android:textColor="#111111"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/big_current_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="這節課"
+        android:textStyle="bold"
+        android:textColor="#111111"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/big_current_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="三 數學課 (輔導室)"
+        android:textColor="#222222"
+        android:textSize="13sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/big_current_time"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="時間：11:00 ~ 12:00"
+        android:textColor="#444444"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/big_current_countdown"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="倒數：00:35:10"
+        android:textColor="#444444"
+        android:textSize="12sp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="#22000000" />
+
+    <TextView
+        android:id="@+id/big_next_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="下節課"
+        android:textStyle="bold"
+        android:textColor="#111111"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/big_next_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="四 數學課 (輔導室)"
+        android:textColor="#222222"
+        android:textSize="13sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/big_next_time"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="時間：13:00 ~ 15:00"
+        android:textColor="#444444"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/big_next_countdown"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="倒數：01:35:10"
+        android:textColor="#444444"
+        android:textSize="12sp" />
+</LinearLayout>

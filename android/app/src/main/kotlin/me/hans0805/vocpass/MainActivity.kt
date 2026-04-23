@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -114,18 +115,35 @@ class MainActivity : FlutterFragmentActivity() {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    val title = "這節課：$currentLabel"
-    val body = "時間 $currentTime｜倒數 $currentCountdown"
-    val bigText = "這節課：$currentLabel\n時間：$currentTime\n倒數：$currentCountdown\n\n下節課：$nextLabel\n時間：$nextTime\n倒數：$nextCountdown"
+    val smallRemoteViews = RemoteViews(packageName, R.layout.notification_class_status_small).apply {
+      setTextViewText(R.id.title, "這節課")
+      setTextViewText(R.id.current_label, currentLabel)
+      setTextViewText(R.id.current_time_countdown, "$currentTime ｜ 倒數 $currentCountdown")
+    }
+
+    val bigRemoteViews = RemoteViews(packageName, R.layout.notification_class_status_big).apply {
+      setTextViewText(R.id.big_title, "課程動態")
+      setTextViewText(R.id.big_current_title, "這節課")
+      setTextViewText(R.id.big_current_label, currentLabel)
+      setTextViewText(R.id.big_current_time, "時間：$currentTime")
+      setTextViewText(R.id.big_current_countdown, "倒數：$currentCountdown")
+      setTextViewText(R.id.big_next_title, "下節課")
+      setTextViewText(R.id.big_next_label, nextLabel)
+      setTextViewText(R.id.big_next_time, "時間：$nextTime")
+      setTextViewText(R.id.big_next_countdown, "倒數：$nextCountdown")
+    }
 
     val notification = NotificationCompat.Builder(this, CLASS_STATUS_CHANNEL_ID)
       .setSmallIcon(R.mipmap.launcher_icon)
-      .setContentTitle(title)
-      .setContentText(body)
-      .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+      .setContentTitle("課程動態")
+      .setContentText("$currentLabel｜倒數 $currentCountdown")
+      .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+      .setCustomContentView(smallRemoteViews)
+      .setCustomBigContentView(bigRemoteViews)
       .setPriority(NotificationCompat.PRIORITY_LOW)
       .setOnlyAlertOnce(true)
       .setOngoing(true)
+      .setAutoCancel(false)
       .setContentIntent(pendingIntent)
       .build()
 
