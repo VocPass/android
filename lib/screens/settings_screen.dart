@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config/app_config.dart';
 import '../services/api_service.dart';
 import '../services/cache_service.dart';
+import '../services/dynamic_island_service.dart';
+import '../services/notification_token_service.dart';
 import '../services/school_config_manager.dart';
 import '../services/vocpass_auth_service.dart';
 import 'edit_profile_screen.dart';
@@ -142,6 +144,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: api.logout,
                   ),
               ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 動態通知
+          Text('動態通知', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.notifications_active_outlined),
+              title: const Text('啟用動態通知'),
+              subtitle: const Text('顯示這節課、下節課與倒數時間'),
+              value: cache.autoStartDynamicIsland,
+              onChanged: (value) async {
+                cache.autoStartDynamicIsland = value;
+
+                if (value) {
+                  await DynamicIslandService.instance.startClassStatusSync();
+                } else {
+                  await DynamicIslandService.instance.stopClassStatusSync();
+                }
+
+                await NotificationTokenService.instance
+                    .syncDynamicNotifyConfigFromCache(
+                  reason: 'toggle_dynamic_notification',
+                  isOpenOverride: value,
+                );
+              },
             ),
           ),
 

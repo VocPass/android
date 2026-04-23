@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'app.dart';
 import 'services/api_service.dart';
 import 'services/cache_service.dart';
+import 'services/dynamic_island_service.dart';
 import 'services/notification_token_service.dart';
 import 'services/school_config_manager.dart';
 import 'services/vocpass_auth_service.dart';
@@ -16,6 +17,11 @@ Future<void> main() async {
   final isGuest = SchoolConfigManager.instance.selectedSchool?.isGuest == true;
   if (!isGuest) {
     await VocPassAuthService.instance.restoreSession();
+  }
+  if (CacheService.instance.autoStartDynamicIsland) {
+    await DynamicIslandService.instance.startClassStatusSync();
+  } else {
+    await DynamicIslandService.instance.stopClassStatusSync();
   }
   await NotificationTokenService.instance.init();
   runApp(

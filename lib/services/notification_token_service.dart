@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
+import '../models/models.dart';
+import 'cache_service.dart';
 import 'vocpass_auth_service.dart';
 
 class NotificationTokenService {
@@ -52,6 +54,95 @@ class NotificationTokenService {
     return _uploadToken(reason: 'app_open_or_manual');
   }
 
+  Future<void> syncDynamicNotifyConfig({
+    required bool isOpen,
+    List<Map<String, dynamic>>? curriculum,
+    String reason = 'dynamic_notify_sync',
+  }) {
+    return _uploadToken(
+      reason: reason,
+      isOpenOverride: isOpen,
+      curriculumOverride: curriculum,
+    );
+  }
+
+  Future<void> syncDynamicNotifyConfigFromCache({
+    String reason = 'dynamic_notify_sync_from_cache',
+    bool? isOpenOverride,
+  }) {
+    return _uploadToken(
+      reason: reason,
+      isOpenOverride: isOpenOverride,
+      curriculumOverride: buildCurriculumJsonFromCache(),
+    );
+  }
+
+  List<Map<String, dynamic>> buildCurriculumJsonFromCache() {
+    final cache = CacheService.instance;
+    final cachedTimetable = cache.getCachedTimetable();
+    final curriculum = cachedTimetable?.curriculum ?? const <String, CourseInfo>{};
+    final apiPeriodTimes = cachedTimetable?.periodTimes ?? const <String, PeriodTime>{};
+    final manualCurriculum = cache.manualCurriculum;
+    final manualRoomTeacher = cache.manualRoomTeacher;
+    final manualPeriodTimes = cache.manualPeriodTimes;
+
+    final slots = <String, Map<String, String>>{};
+
+    for (final entry in curriculum.entries) {
+      for (final schedule in entry.value.schedule) {
+        final key = '${schedule.weekday}|${schedule.period}';
+        slots[key] = {
+          'weekday': schedule.weekday,
+          'period': schedule.period,
+          'subject': entry.key,
+          'room': '',
+          'teacher': '',
+        };
+      }
+    }
+
+    for (final entry in manualCurriculum.entries) {
+      final parts = entry.key.split('|');
+      if (parts.length != 2) continue;
+      slots[entry.key] = {
+        'weekday': parts[0],
+        'period': parts[1],
+        'subject': entry.value,
+        'room': manualRoomTeacher[entry.key]?.room ?? '',
+        'teacher': manualRoomTeacher[entry.key]?.teacher ?? '',
+      };
+    }
+
+    final result = <Map<String, dynamic>>[];
+    for (final slot in slots.values) {
+      final subject = (slot['subject'] ?? '').trim();
+      if (subject.isEmpty) continue;
+
+      final period = slot['period'] ?? '';
+      final periodTime = manualPeriodTimes[period] ?? apiPeriodTimes[period];
+
+      result.add({
+        'weekday': slot['weekday'] ?? '',
+        'period': period,
+        'subject': subject,
+        'startTime': periodTime?.startTime ?? '',
+        'endTime': periodTime?.endTime ?? '',
+        'room': slot['room'] ?? '',
+        'teacher': slot['teacher'] ?? '',
+      });
+    }
+
+    result.sort((a, b) {
+      final weekdayCompare = _weekdayOrder(a['weekday'].toString())
+          .compareTo(_weekdayOrder(b['weekday'].toString()));
+      if (weekdayCompare != 0) return weekdayCompare;
+      return _periodOrder(a['period'].toString())
+          .compareTo(_periodOrder(b['period'].toString()));
+    });
+
+    return result;
+  }
+
   Future<FirebaseMessaging?> _getMessagingIfReady() async {
     try {
       if (Firebase.apps.isEmpty) {
@@ -91,7 +182,12 @@ class NotificationTokenService {
     });
   }
 
-  Future<void> _uploadToken({String? fcmTokenOverride, required String reason}) async {
+  Future<void> _uploadToken({
+    String? fcmTokenOverride,
+    required String reason,
+    bool? isOpenOverride,
+    List<Map<String, dynamic>>? curriculumOverride,
+  }) async {
     try {
       final deviceToken = await _androidId.getId();
       if (deviceToken == null || deviceToken.isEmpty) {
@@ -121,10 +217,14 @@ class NotificationTokenService {
         print('[NotifyToken] fcm token is empty ($reason), fallback upload with SSAID only');
       }
 
+      final isOpen = isOpenOverride ?? CacheService.instance.autoStartDynamicIsland;
+      final curriculum = curriculumOverride ?? buildCurriculumJsonFromCache();
+
       final payload = <String, dynamic>{
         'device_token': deviceToken,
         'fcm_token': fcmToken ?? '',
-        'is_open': true,
+        'is_open': isOpen,
+        'curriculum': curriculum,
         'valid': true,
       };
 
@@ -175,5 +275,55 @@ class NotificationTokenService {
       return '裝置缺少 Google Play Services，FCM 無法工作。';
     }
     return '未知錯誤，請先確認 google-services.json、Play Services、網路與時間設定。';
+  }
+
+  int _weekdayOrder(String weekday) {
+    const order = {
+      '一': 1,
+      '二': 2,
+      '三': 3,
+      '四': 4,
+      '五': 5,
+      '六': 6,
+      '日': 7,
+      '天': 7,
+      '1': 1,
+      '2': 2,
+      '3': 3,
+      '4': 4,
+      '5': 5,
+      '6': 6,
+      '7': 7,
+    };
+    return order[weekday] ?? 99;
+  }
+
+  int _periodOrder(String period) {
+    const order = {
+      '早讀': 0,
+      '一': 1,
+      '二': 2,
+      '三': 3,
+      '四': 4,
+      '五': 5,
+      '六': 6,
+      '七': 7,
+      '八': 8,
+      '九': 9,
+      '十': 10,
+      '十一': 11,
+      '十二': 12,
+      '十三': 13,
+      '十四': 14,
+      '十五': 15,
+      '十六': 16,
+      '十七': 17,
+      '十八': 18,
+      '十九': 19,
+      '二十': 20,
+    };
+    final mapped = order[period];
+    if (mapped != null) return mapped;
+    return int.tryParse(period) ?? 999;
   }
 }

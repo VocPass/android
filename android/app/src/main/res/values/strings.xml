@@ -3,4 +3,6 @@
     <string name="push_channel_name">VocPass 通知</string>
     <string name="push_channel_description">課務與系統提醒通知</string>
     <string name="push_channel_id">vocpass_push</string>
+    <string name="class_status_channel_name">課程動態通知</string>
+    <string name="class_status_channel_description">顯示目前課程、下節課與倒數時間</string>
 </resources>

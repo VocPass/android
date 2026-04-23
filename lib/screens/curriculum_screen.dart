@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/cache_service.dart';
+import '../services/notification_token_service.dart';
 import '../services/school_config_manager.dart';
 import 'unsupported_screen.dart';
 
@@ -178,6 +181,12 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
     return colors[subject.hashCode.abs() % colors.length];
   }
 
+  Future<void> _syncNotifyCurriculum() async {
+    await NotificationTokenService.instance.syncDynamicNotifyConfigFromCache(
+      reason: 'curriculum_edited',
+    );
+  }
+
   void _showCellEditSheet(String weekday, String period) {
     final key = _manualKey(weekday, period);
     final currentSubject = _getSubject(weekday, period);
@@ -283,6 +292,7 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
                           CacheService.instance.manualCurriculum = _manualCurriculum;
                           CacheService.instance.manualRoomTeacher = _manualRoomTeacher;
                         });
+                        unawaited(_syncNotifyCurriculum());
                         Navigator.pop(ctx);
                       },
                       style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
@@ -306,6 +316,7 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
                         }
                         CacheService.instance.manualRoomTeacher = _manualRoomTeacher;
                       });
+                      unawaited(_syncNotifyCurriculum());
                       Navigator.pop(ctx);
                     },
                     child: const Text('儲存'),
@@ -400,6 +411,7 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
                             CacheService.instance.manualPeriodTimes =
                                 _manualPeriodTimes;
                           });
+                          unawaited(_syncNotifyCurriculum());
                           Navigator.pop(ctx);
                         },
                         style: OutlinedButton.styleFrom(
@@ -419,6 +431,7 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
                           CacheService.instance.manualPeriodTimes =
                               _manualPeriodTimes;
                         });
+                        unawaited(_syncNotifyCurriculum());
                         Navigator.pop(ctx);
                       },
                       child: const Text('儲存'),
