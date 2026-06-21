@@ -28,11 +28,19 @@ class _LoginScreenState extends State<LoginScreen> {
   InAppWebViewController? _controller;
   bool _isLoggingIn = false;
   bool _isCaptchaRecognizing = false;
+  bool _isPreparingWebView = true;
   String? _lastCaptcha;
   bool _hasLoggedIn = false;
   bool _isCheckingLoginState = false;
   int? _lastContentHash;
   final List<String> _visitedUrls = [];
+  String? _webViewUserAgent;
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareWebView();
+  }
 
   List<String> get _loginKeywords {
     final fromApi = widget.school.login.successKeywords
@@ -48,6 +56,15 @@ class _LoginScreenState extends State<LoginScreen> {
     _visitedUrls.add(url);
   }
 
+  Future<void> _prepareWebView() async {
+    final userAgent = await ApiService.instance.fetchWebViewUserAgent(widget.school);
+    if (!mounted) return;
+    setState(() {
+      _webViewUserAgent = userAgent;
+      _isPreparingWebView = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final cache = context.read<CacheService>();
@@ -60,112 +77,117 @@ class _LoginScreenState extends State<LoginScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Stack(
-        children: [
-          InAppWebView(
-            initialUrlRequest:
-                URLRequest(url: WebUri(widget.targetUrl.toString())),
-            initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: true,
-              mediaPlaybackRequiresUserGesture: false,
-            ),
-            initialUserScripts: UnmodifiableListView([
-              UserScript(
-                source: _buildUrlTrackingScript(),
-                injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
-                forMainFrameOnly: false,
-              ),
-              UserScript(
-                source: _buildInjectedScript(cache),
-                injectionTime: UserScriptInjectionTime.AT_DOCUMENT_END,
-                forMainFrameOnly: true,
-              ),
-            ]),
-            onWebViewCreated: (controller) {
-              _controller = controller;
-              controller.addJavaScriptHandler(
-                handlerName: 'formSubmit',
-                callback: (_) {
-                  setState(() => _isLoggingIn = true);
-                },
-              );
-              controller.addJavaScriptHandler(
-                handlerName: 'saveCredentials',
-                callback: (args) {
-                  if (args.isEmpty || args.first is! Map) return;
-                  final map = (args.first as Map).cast<String, dynamic>();
-                  final username = map['username']?.toString() ?? '';
-                  final password = map['password']?.toString() ?? '';
-                  if (username.isNotEmpty || password.isNotEmpty) {
-                    cache.saveLoginCredentials(
-                      username: username,
-                      password: password,
-                      schoolCode: null,
+      body: _isPreparingWebView
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : Stack(
+              children: [
+                InAppWebView(
+                  initialUrlRequest:
+                      URLRequest(url: WebUri(widget.targetUrl.toString())),
+                  initialSettings: InAppWebViewSettings(
+                    javaScriptEnabled: true,
+                    mediaPlaybackRequiresUserGesture: false,
+                    userAgent: _webViewUserAgent,
+                  ),
+                  initialUserScripts: UnmodifiableListView([
+                    UserScript(
+                      source: _buildUrlTrackingScript(),
+                      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                      forMainFrameOnly: false,
+                    ),
+                    UserScript(
+                      source: _buildInjectedScript(cache),
+                      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_END,
+                      forMainFrameOnly: true,
+                    ),
+                  ]),
+                  onWebViewCreated: (controller) {
+                    _controller = controller;
+                    controller.addJavaScriptHandler(
+                      handlerName: 'formSubmit',
+                      callback: (_) {
+                        setState(() => _isLoggingIn = true);
+                      },
                     );
-                  }
-                },
-              );
-              controller.addJavaScriptHandler(
-                handlerName: 'recognizeCaptcha',
-                callback: (args) async {
-                  if (args.isEmpty || args.first is! Map) return;
-                  final map = (args.first as Map).cast<String, dynamic>();
-                  final selector = map['selector']?.toString() ?? 'captcha';
-                  await _recognizeCaptcha(selector);
-                },
-              );
-              controller.addJavaScriptHandler(
-                handlerName: 'urlTracking',
-                callback: (args) {
-                  if (args.isEmpty) return;
-                  final url = args.first?.toString() ?? '';
-                  if (url.isNotEmpty) _recordUrl(url);
-                },
-              );
-            },
-            onLoadStart: (controller, url) {
-              final currentUrl = url?.toString().toLowerCase() ?? '';
-              final loginPath = widget.school.url.login.toLowerCase();
-              if (!currentUrl.contains(loginPath) && !_hasLoggedIn) {
-                setState(() => _isLoggingIn = true);
-              }
-              if (url != null) _recordUrl(url.toString());
-            },
-            onLoadStop: (controller, url) {
-              if (url != null) _recordUrl(url.toString());
-              _injectCustomJsIfNeeded();
-              _startContinuousDetection(url?.toString() ?? '');
-            },
-            onLoadError: (_, __, ___, ____) {
-              setState(() => _isLoggingIn = false);
-            },
-          ),
-          if (_isLoggingIn)
-            const Positioned(
-              top: 12,
-              right: 12,
-              child: Chip(
-                avatar: SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                    controller.addJavaScriptHandler(
+                      handlerName: 'saveCredentials',
+                      callback: (args) {
+                        if (args.isEmpty || args.first is! Map) return;
+                        final map = (args.first as Map).cast<String, dynamic>();
+                        final username = map['username']?.toString() ?? '';
+                        final password = map['password']?.toString() ?? '';
+                        if (username.isNotEmpty || password.isNotEmpty) {
+                          cache.saveLoginCredentials(
+                            username: username,
+                            password: password,
+                            schoolCode: null,
+                          );
+                        }
+                      },
+                    );
+                    controller.addJavaScriptHandler(
+                      handlerName: 'recognizeCaptcha',
+                      callback: (args) async {
+                        if (args.isEmpty || args.first is! Map) return;
+                        final map = (args.first as Map).cast<String, dynamic>();
+                        final selector = map['selector']?.toString() ?? 'captcha';
+                        await _recognizeCaptcha(selector);
+                      },
+                    );
+                    controller.addJavaScriptHandler(
+                      handlerName: 'urlTracking',
+                      callback: (args) {
+                        if (args.isEmpty) return;
+                        final url = args.first?.toString() ?? '';
+                        if (url.isNotEmpty) _recordUrl(url);
+                      },
+                    );
+                  },
+                  onLoadStart: (controller, url) {
+                    final currentUrl = url?.toString().toLowerCase() ?? '';
+                    final loginPath = widget.school.url.login.toLowerCase();
+                    if (!currentUrl.contains(loginPath) && !_hasLoggedIn) {
+                      setState(() => _isLoggingIn = true);
+                    }
+                    if (url != null) _recordUrl(url.toString());
+                  },
+                  onLoadStop: (controller, url) {
+                    if (url != null) _recordUrl(url.toString());
+                    _injectCustomJsIfNeeded();
+                    _startContinuousDetection(url?.toString() ?? '');
+                  },
+                  onLoadError: (_, __, ___, ____) {
+                    setState(() => _isLoggingIn = false);
+                  },
                 ),
-                label: Text('登入中...'),
-              ),
+                if (_isLoggingIn)
+                  const Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Chip(
+                      avatar: SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      label: Text('登入中...'),
+                    ),
+                  ),
+                Positioned(
+                  bottom: 24,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: CaptchaIndicator(
+                      isRecognizing: _isCaptchaRecognizing,
+                      lastText: _lastCaptcha,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          Positioned(
-            bottom: 24,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: CaptchaIndicator(
-                isRecognizing: _isCaptchaRecognizing,
-                lastText: _lastCaptcha,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

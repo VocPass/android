@@ -458,6 +458,53 @@ class ApiService extends ChangeNotifier {
     return HtmlParser.parseExamScores(html);
   }
 
+  Future<String?> fetchWebViewUserAgent(SchoolConfig school) async {
+    final uri = Uri.parse('${AppConfig.vocPassApiHost}/api/${school.vision}/ua')
+        .replace(queryParameters: {'android': '1'});
+
+    if (kDebugMode) {
+      print('[vocPass-log] API Request: GET $uri headers=${{'Accept': 'application/json'}}');
+    }
+
+    try {
+      final response = await http.get(
+        uri,
+        headers: const {
+          'Accept': 'application/json',
+        },
+      );
+
+      if (kDebugMode) {
+        print('[vocPass-log] API Response: $uri status=${response.statusCode} body=${response.body}');
+      }
+
+      if (response.statusCode != 200) {
+        return null;
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        final code = JsonUtils.readInt(decoded, ['code', 'status'], defaultValue: response.statusCode);
+        if (code != 200) {
+          return null;
+        }
+
+        final userAgent = decoded['data']?.toString().trim() ?? '';
+        if (userAgent.isNotEmpty) {
+          return userAgent;
+        }
+      }
+
+      final raw = response.body.trim();
+      return raw.isEmpty ? null : raw;
+    } catch (e) {
+      if (kDebugMode) {
+        print('[vocPass-log] API Error: $uri error=$e');
+      }
+      return null;
+    }
+  }
+
   Future<AttendanceResult> fetchAttendanceWithCurriculum(
       {String classNumber = '212'}) async {
     final attendanceFuture = fetchAttendance();
