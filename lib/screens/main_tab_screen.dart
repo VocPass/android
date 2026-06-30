@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'forum/forum_screen.dart';
 import 'home_page_screen.dart';
 import 'school_affairs_screen.dart';
 import 'settings_screen.dart';
@@ -17,6 +18,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
   final _pages = const [
     HomePageScreen(),
     SchoolAffairsScreen(),
+    ForumScreen(),
     SettingsScreen(),
   ];
 
@@ -42,6 +44,11 @@ class _MainTabScreenState extends State<MainTabScreen> {
             icon: Icon(Icons.account_balance_outlined),
             selectedIcon: Icon(Icons.account_balance),
             label: '校務',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.forum_outlined),
+            selectedIcon: Icon(Icons.forum),
+            label: '論壇',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

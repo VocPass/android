@@ -77,6 +77,18 @@ class VocPassAuthService extends ChangeNotifier {
     }
   }
 
+  /// 重新取得使用者資料並更新 currentUser（會通知監聽者）。
+  Future<void> refreshMe() async {
+    if (!hasToken) return;
+    final user = await fetchMe();
+    currentUser = user;
+    isLoggedIn = true;
+    if (user.shareStatus != null) {
+      CacheService.instance.isCurriculumSharing = user.shareStatus!;
+    }
+    notifyListeners();
+  }
+
   Future<VocPassUser> fetchMe() async {
     final url = Uri.parse('${AppConfig.vocPassApiHost}/auth/me');
     final response = await http.get(url, headers: _authHeaders);

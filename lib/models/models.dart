@@ -940,6 +940,9 @@ class VocPassUser {
   final bool verified;
   final bool? shareStatus;
 
+  /// 已驗證的學校名稱（同時登入過學校帳號與 VocPass 帳號後才有值）。
+  final String? school;
+
   VocPassUser({
     required this.id,
     required this.name,
@@ -949,10 +952,17 @@ class VocPassUser {
     required this.emailVisibility,
     required this.verified,
     required this.shareStatus,
+    required this.school,
   });
 
   String? get avatarURL => (avatar != null && avatar!.isNotEmpty) ? avatar : null;
   String get displayName => name.isEmpty ? username : name;
+
+  /// 已驗證的學校名稱，去除空白；未驗證回傳 null。
+  String? get verifiedSchool {
+    final value = school?.trim();
+    return (value != null && value.isNotEmpty) ? value : null;
+  }
 
   factory VocPassUser.fromJson(Map<String, dynamic> json) {
     return VocPassUser(
@@ -963,9 +973,12 @@ class VocPassUser {
       avatar: json['avatar']?.toString(),
       emailVisibility: JsonUtils.readBool(json, ['email_visibility', 'emailVisibility']),
       verified: JsonUtils.readBool(json, ['verified']),
-      shareStatus: json.containsKey('share_status') || json.containsKey('shareStatus')
-          ? JsonUtils.readBool(json, ['share_status', 'shareStatus'])
+      shareStatus: json.containsKey('share_status') ||
+              json.containsKey('shareStatus') ||
+              json.containsKey('curriculum_status')
+          ? JsonUtils.readBool(json, ['share_status', 'shareStatus', 'curriculum_status'])
           : null,
+      school: JsonUtils.readStringNullable(json, ['school']),
     );
   }
 }
