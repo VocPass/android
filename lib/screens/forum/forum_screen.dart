@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -114,7 +115,10 @@ class _ForumScreenState extends State<ForumScreen> {
       else
         Future<ForumAdminInfo?>.value(null),
       ForumService.instance.fetchVocPassAdminInfo(),
-      ForumService.instance.fetchTags().catchError((_) => <ForumTagOption>[]),
+      ForumService.instance.fetchTags().catchError((e) {
+        if (kDebugMode) print('[Forum] fetchTags 失敗: $e');
+        return <ForumTagOption>[];
+      }),
     ]);
     if (!mounted) return;
     setState(() {

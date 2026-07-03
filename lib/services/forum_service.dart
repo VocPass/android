@@ -131,7 +131,9 @@ class ForumService {
       if (data is Map) {
         return ForumAdminInfo.fromJson(data.cast<String, dynamic>());
       }
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) print('[Forum] fetchAdminInfo 失敗: $e');
+    }
     return null;
   }
 

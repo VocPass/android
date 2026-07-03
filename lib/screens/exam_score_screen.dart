@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -49,7 +50,8 @@ class _ExamScoreScreenState extends State<ExamScoreScreen> {
           _isLoading = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) print('[ExamScore] 考試選單載入失敗: $e');
       setState(() {
         _error = '考試成績載入失敗';
         _isLoading = false;
@@ -148,7 +150,8 @@ class _ExamScoreDetailScreenState extends State<ExamScoreDetailScreen> {
         _error = e.message;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) print('[ExamScore] 考試成績載入失敗: $e');
       setState(() {
         _error = '考試成績載入失敗';
         _isLoading = false;

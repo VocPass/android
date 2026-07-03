@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -126,7 +127,8 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
           _isLoading = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) print('[Curriculum] 課表載入失敗: $e');
       if (!mounted) return;
       setState(() {
         _error = '課表載入失敗';

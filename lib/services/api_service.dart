@@ -514,7 +514,8 @@ class ApiService extends ChangeNotifier {
     Map<String, CourseInfo>? curriculum;
     try {
       curriculum = await curriculumFuture;
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) print('[ApiService] 課表載入失敗（缺曠頁面仍可運作）: $e');
       curriculum = null;
     }
 

@@ -56,12 +56,14 @@ class VocPassAuthService extends ChangeNotifier {
     } catch (e) {
       await _saveToken(null);
       if (kDebugMode) print('[VocPassAuth] 取得使用者資料失敗: $e');
+      rethrow;
     }
   }
 
-  // Restore session on app start
-  Future<void> restoreSession() async {
-    if (_authToken == null || _authToken!.isEmpty) return;
+  // Restore session on app start.
+  // Returns true if session was restored, false if token was invalid/expired.
+  Future<bool> restoreSession() async {
+    if (_authToken == null || _authToken!.isEmpty) return false;
     try {
       final user = await fetchMe();
       currentUser = user;
@@ -71,9 +73,11 @@ class VocPassAuthService extends ChangeNotifier {
       }
       notifyListeners();
       if (kDebugMode) print('[VocPassAuth] 已恢復 session: ${user.displayName}');
+      return true;
     } catch (e) {
       await _saveToken(null);
       if (kDebugMode) print('[VocPassAuth] Session 已失效: $e');
+      return false;
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -34,7 +35,9 @@ class _FollowingListScreenState extends State<FollowingListScreen> {
       final profile = await VocPassAuthService.instance.fetchUser(username);
       if (!mounted) return;
       setState(() => _profiles[username] = profile);
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) print('[FollowingList] 取得用戶 $username 資料失敗: $e');
+    }
   }
 
   void _showAddDialog() {

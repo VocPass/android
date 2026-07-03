@@ -79,8 +79,12 @@ class _RootRouterState extends State<RootRouter> {
   }
 
   Future<void> _handleTokenLoginAndSyncNotify(String token) async {
-    await VocPassAuthService.instance.handleTokenLogin(token);
-    await NotificationTokenService.instance.uploadNow();
+    try {
+      await VocPassAuthService.instance.handleTokenLogin(token);
+      await NotificationTokenService.instance.uploadNow();
+    } catch (e) {
+      if (kDebugMode) print('[DeepLink] token login failed: $e');
+    }
   }
 
   @override

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -52,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
+      if (kDebugMode) print('[Home] 獎懲資料載入失敗: $e');
       setState(() {
         _error = '資料載入失敗';
         _isLoading = false;

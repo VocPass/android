@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -667,10 +668,11 @@ class _W2MEditSheetState extends State<_W2MEditSheet> {
     _selectedDates = widget.event.dates.map((s) {
       try {
         return DateTime.parse(s);
-      } catch (_) {
-        return DateTime.now();
+      } catch (e) {
+        if (kDebugMode) print('[W2M] 無法解析日期 "$s": $e');
+        return null;
       }
-    }).toSet();
+    }).whereType<DateTime>().toSet();
   }
 
   @override

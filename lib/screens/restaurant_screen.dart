@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -351,6 +353,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
   bool _isLoading = false;
   bool _isLoadingMenu = false;
   String? _evalError;
+  String? _menuError;
 
   double? get _averageScore {
     if (_evaluations.isEmpty) return null;
@@ -385,9 +388,10 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
       final list = await api.fetchRestaurantMenu(widget.restaurant.id);
       if (!mounted) return;
       setState(() { _menuItems = list; _isLoadingMenu = false; });
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) print('[Restaurant] 菜單載入失敗: $e');
       if (!mounted) return;
-      setState(() => _isLoadingMenu = false);
+      setState(() { _menuError = e.toString(); _isLoadingMenu = false; });
     }
   }
 
@@ -565,6 +569,11 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                 padding: EdgeInsets.all(16),
                 child: CircularProgressIndicator(),
               ))
+            else if (_menuError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text('菜單載入失敗', style: TextStyle(color: Colors.red[400])),
+              )
             else if (_menuItems.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),

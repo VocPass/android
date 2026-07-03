@@ -1,5 +1,6 @@
 // 論壇學校驗證狀態說明
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -14,7 +15,9 @@ Future<void> showForumVerificationSheet(
   if (VocPassAuthService.instance.isLoggedIn) {
     try {
       await VocPassAuthService.instance.refreshMe();
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) print('[ForumVerification] 刷新用戶資料失敗: $e');
+    }
   }
   if (!context.mounted) return;
   await showModalBottomSheet<void>(
