@@ -8,6 +8,7 @@ import '../services/api_service.dart';
 import '../services/cache_service.dart';
 import '../services/notification_token_service.dart';
 import '../services/school_config_manager.dart';
+import '../widgets/timetable_cells.dart';
 import 'unsupported_screen.dart';
 
 class CurriculumScreen extends StatefulWidget {
@@ -556,8 +557,8 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
             children: [
               // Header
               TableRow(children: [
-                _headerCell('節次'),
-                ..._weekdays.map((d) => _headerCell('週$d')),
+                const TimetableHeaderCell(text: '節次'),
+                ..._weekdays.map((d) => TimetableHeaderCell(text: '週$d')),
               ]),
               // Rows
               ...periods.map((period) => TableRow(children: [
@@ -579,15 +580,6 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
           style: TextStyle(fontSize: 10, color: Colors.grey[400]),
         ),
       ],
-    );
-  }
-
-  Widget _headerCell(String text) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      color: Colors.grey[200],
-      alignment: Alignment.center,
-      child: Text(text, style: const TextStyle(fontSize: 12)),
     );
   }
 

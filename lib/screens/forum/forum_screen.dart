@@ -189,13 +189,13 @@ class _ForumScreenState extends State<ForumScreen> {
     final index = _posts.indexWhere((p) => p.id == post.id);
     if (index < 0) return;
     final liked = post.isLikedBy(userID);
-    setState(() => _posts[index] = _toggledLike(post, userID, !liked));
+    setState(() => _posts[index] = post.copyWithLikes(userID, liked: !liked));
     try {
       await ForumService.instance
           .setPostLike(postID: post.likeTargetID, liked: !liked);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _posts[index] = _toggledLike(post, userID, liked));
+      setState(() => _posts[index] = post.copyWithLikes(userID, liked: liked));
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(e.toString())));
     }
@@ -531,29 +531,6 @@ class _ForumScreenState extends State<ForumScreen> {
     return const SizedBox(height: 80);
   }
 
-  ForumPost _toggledLike(ForumPost post, String userID, bool liked) {
-    final likes = List<String>.from(post.likes);
-    if (liked) {
-      if (!likes.contains(userID)) likes.add(userID);
-    } else {
-      likes.remove(userID);
-    }
-    return ForumPost(
-      id: post.id,
-      post: post.post,
-      school: post.school,
-      title: post.title,
-      content: post.content,
-      anonymous: post.anonymous,
-      pin: post.pin,
-      tags: post.tags,
-      images: post.images,
-      likes: likes,
-      user: post.user,
-      created: post.created,
-      updated: post.updated,
-    );
-  }
 }
 
 class _SchoolIcon extends StatelessWidget {

@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../widgets/async_content_builder.dart';
+import '../widgets/empty_tile.dart';
+import '../widgets/score_label.dart';
 import 'unsupported_screen.dart';
 
 class ExamScoreScreen extends StatefulWidget {
@@ -66,20 +69,13 @@ class _ExamScoreScreenState extends State<ExamScoreScreen> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_unsupported) {
-      return const UnsupportedScreen(
-        title: '此功能不支援',
-        message: '目前選擇的學校尚未支援此功能',
-      );
-    }
-    if (_error != null) {
-      return UnsupportedScreen(
-        title: '載入失敗',
-        message: _error!,
+    if (_isLoading || _unsupported || _error != null) {
+      return AsyncContentBuilder(
+        isLoading: _isLoading,
+        isUnsupported: _unsupported,
+        error: _error,
         onRetry: _loadMenu,
+        child: const SizedBox.shrink(),
       );
     }
     if (_menu.isEmpty) {
@@ -195,7 +191,7 @@ class _ExamScoreDetailScreenState extends State<ExamScoreDetailScreen> {
         Text('科目成績', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         if (_data.subjects.isEmpty)
-          const _EmptyTile(message: '無成績資料')
+          const EmptyTile(message: '無成績資料')
         else
           ..._data.subjects.map((s) => _ExamSubjectCard(score: s)),
       ],
@@ -222,8 +218,8 @@ class _ExamSubjectCard extends StatelessWidget {
             const SizedBox(height: 6),
             Row(
               children: [
-                Expanded(child: _ScoreLabel(label: '個人', value: score.personalScore)),
-                Expanded(child: _ScoreLabel(label: '班均', value: score.classAverage)),
+                Expanded(child: ScoreLabel(label: '個人', value: score.personalScore)),
+                Expanded(child: ScoreLabel(label: '班均', value: score.classAverage)),
               ],
             ),
           ],
@@ -233,43 +229,4 @@ class _ExamSubjectCard extends StatelessWidget {
   }
 }
 
-class _ScoreLabel extends StatelessWidget {
-  final String label;
-  final String value;
 
-  const _ScoreLabel({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.labelSmall),
-        const SizedBox(height: 2),
-        Text(value, style: Theme.of(context).textTheme.titleSmall),
-      ],
-    );
-  }
-}
-
-class _EmptyTile extends StatelessWidget {
-  final String message;
-
-  const _EmptyTile({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline, color: Colors.grey),
-            const SizedBox(width: 12),
-            Text(message),
-          ],
-        ),
-      ),
-    );
-  }
-}

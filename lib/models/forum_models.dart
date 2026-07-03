@@ -104,6 +104,30 @@ class ForumPost {
   bool isLikedBy(String? userID) =>
       userID != null && userID.isNotEmpty && likes.contains(userID);
 
+  ForumPost copyWithLikes(String userID, {required bool liked}) {
+    final newLikes = List<String>.from(likes);
+    if (liked) {
+      if (!newLikes.contains(userID)) newLikes.add(userID);
+    } else {
+      newLikes.remove(userID);
+    }
+    return ForumPost(
+      id: id,
+      post: post,
+      school: school,
+      title: title,
+      content: content,
+      anonymous: anonymous,
+      pin: pin,
+      tags: tags,
+      images: images,
+      likes: newLikes,
+      user: user,
+      created: created,
+      updated: updated,
+    );
+  }
+
   factory ForumPost.fromJson(Map<String, dynamic> json) {
     final user = json['user'];
     return ForumPost(
@@ -144,6 +168,23 @@ class ForumMessage {
 
   bool isLikedBy(String? userID) =>
       userID != null && userID.isNotEmpty && likes.contains(userID);
+
+  ForumMessage copyWithLikes(String userID, {required bool liked}) {
+    final newLikes = List<String>.from(likes);
+    if (liked) {
+      if (!newLikes.contains(userID)) newLikes.add(userID);
+    } else {
+      newLikes.remove(userID);
+    }
+    return ForumMessage(
+      id: id,
+      content: content,
+      anonymous: anonymous,
+      user: user,
+      created: created,
+      likes: newLikes,
+    );
+  }
 
   factory ForumMessage.fromJson(Map<String, dynamic> json) {
     final user = json['user'];

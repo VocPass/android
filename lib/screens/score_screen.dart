@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../widgets/async_content_builder.dart';
+import '../widgets/empty_tile.dart';
+import '../widgets/score_label.dart';
 import 'exam_score_screen.dart';
-import 'unsupported_screen.dart';
 
 class ScoreScreen extends StatefulWidget {
   const ScoreScreen({super.key});
@@ -80,20 +82,13 @@ class _ScoreScreenState extends State<ScoreScreen> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_unsupported) {
-      return const UnsupportedScreen(
-        title: '此功能不支援',
-        message: '目前選擇的學校尚未支援此功能',
-      );
-    }
-    if (_error != null) {
-      return UnsupportedScreen(
-        title: '載入失敗',
-        message: _error!,
+    if (_isLoading || _unsupported || _error != null) {
+      return AsyncContentBuilder(
+        isLoading: _isLoading,
+        isUnsupported: _unsupported,
+        error: _error,
         onRetry: _loadData,
+        child: const SizedBox.shrink(),
       );
     }
 
@@ -115,7 +110,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
           Text('科目成績', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (_gradeData.subjects.isEmpty)
-            const _EmptyTile(message: '無成績資料')
+            const EmptyTile(message: '無成績資料')
           else
             ..._gradeData.subjects.map((subject) => _SubjectGradeCard(subject: subject)),
           const SizedBox(height: 16),
@@ -279,9 +274,9 @@ class _TotalScoreCard extends StatelessWidget {
             const SizedBox(height: 6),
             Row(
               children: [
-                Expanded(child: _ScoreLabel(label: '上學期', value: score.firstSemester)),
-                Expanded(child: _ScoreLabel(label: '下學期', value: score.secondSemester)),
-                Expanded(child: _ScoreLabel(label: '學年', value: score.year)),
+                Expanded(child: ScoreLabel(label: '上學期', value: score.firstSemester)),
+                Expanded(child: ScoreLabel(label: '下學期', value: score.secondSemester)),
+                Expanded(child: ScoreLabel(label: '學年', value: score.year)),
               ],
             ),
           ],
@@ -291,24 +286,7 @@ class _TotalScoreCard extends StatelessWidget {
   }
 }
 
-class _ScoreLabel extends StatelessWidget {
-  final String label;
-  final String value;
 
-  const _ScoreLabel({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.labelSmall),
-        const SizedBox(height: 2),
-        Text(value, style: Theme.of(context).textTheme.titleSmall),
-      ],
-    );
-  }
-}
 
 class _DailyPerformanceCard extends StatelessWidget {
   final String title;
@@ -370,24 +348,4 @@ class _PerfRow extends StatelessWidget {
   }
 }
 
-class _EmptyTile extends StatelessWidget {
-  final String message;
 
-  const _EmptyTile({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline, color: Colors.grey),
-            const SizedBox(width: 12),
-            Text(message),
-          ],
-        ),
-      ),
-    );
-  }
-}

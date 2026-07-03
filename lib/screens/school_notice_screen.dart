@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../widgets/async_content_builder.dart';
 import 'unsupported_screen.dart';
 
 class SchoolNoticeScreen extends StatefulWidget {
@@ -75,21 +76,13 @@ class _SchoolNoticeScreenState extends State<SchoolNoticeScreen> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_unsupported) {
-      return const UnsupportedScreen(
-        title: '此功能不支援',
-        message: '目前選擇的學校尚未支援此功能',
-        showRetry: false,
-      );
-    }
-    if (_error != null) {
-      return UnsupportedScreen(
-        title: '載入失敗',
-        message: _error!,
+    if (_isLoading || _unsupported || _error != null) {
+      return AsyncContentBuilder(
+        isLoading: _isLoading,
+        isUnsupported: _unsupported,
+        error: _error,
         onRetry: _loadData,
+        child: const SizedBox.shrink(),
       );
     }
     if (_notices.isEmpty) {

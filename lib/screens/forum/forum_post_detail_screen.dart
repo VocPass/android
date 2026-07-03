@@ -96,13 +96,13 @@ class _ForumPostDetailScreenState extends State<ForumPostDetailScreen> {
     final userID = _currentUserID;
     if (userID == null) return;
     final liked = _post.isLikedBy(userID);
-    setState(() => _post = _withPostLike(_post, userID, !liked));
+    setState(() => _post = _post.copyWithLikes(userID, liked: !liked));
     try {
       await ForumService.instance
           .setPostLike(postID: _post.likeTargetID, liked: !liked);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _post = _withPostLike(_post, userID, liked));
+      setState(() => _post = _post.copyWithLikes(userID, liked: liked));
       _showError(e);
     }
   }
@@ -114,13 +114,13 @@ class _ForumPostDetailScreenState extends State<ForumPostDetailScreen> {
     final liked = message.isLikedBy(userID);
     final index = _messages.indexWhere((m) => m.id == message.id);
     if (index < 0) return;
-    setState(() => _messages[index] = _withMessageLike(message, userID, !liked));
+    setState(() => _messages[index] = message.copyWithLikes(userID, liked: !liked));
     try {
       await ForumService.instance
           .setMessageLike(messageID: message.id, liked: !liked);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _messages[index] = _withMessageLike(message, userID, liked));
+      setState(() => _messages[index] = message.copyWithLikes(userID, liked: liked));
       _showError(e);
     }
   }
@@ -527,48 +527,6 @@ class _ForumPostDetailScreenState extends State<ForumPostDetailScreen> {
     );
   }
 
-  // MARK: - 樂觀更新輔助
-
-  ForumPost _withPostLike(ForumPost post, String userID, bool liked) {
-    final likes = List<String>.from(post.likes);
-    if (liked) {
-      if (!likes.contains(userID)) likes.add(userID);
-    } else {
-      likes.remove(userID);
-    }
-    return ForumPost(
-      id: post.id,
-      post: post.post,
-      school: post.school,
-      title: post.title,
-      content: post.content,
-      anonymous: post.anonymous,
-      pin: post.pin,
-      tags: post.tags,
-      images: post.images,
-      likes: likes,
-      user: post.user,
-      created: post.created,
-      updated: post.updated,
-    );
-  }
-
-  ForumMessage _withMessageLike(ForumMessage message, String userID, bool liked) {
-    final likes = List<String>.from(message.likes);
-    if (liked) {
-      if (!likes.contains(userID)) likes.add(userID);
-    } else {
-      likes.remove(userID);
-    }
-    return ForumMessage(
-      id: message.id,
-      content: message.content,
-      anonymous: message.anonymous,
-      user: message.user,
-      created: message.created,
-      likes: likes,
-    );
-  }
 }
 
 class _LikeButton extends StatelessWidget {

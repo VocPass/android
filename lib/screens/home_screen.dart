@@ -3,7 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
-import 'unsupported_screen.dart';
+import '../widgets/async_content_builder.dart';
+import '../widgets/empty_tile.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -68,20 +69,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_unsupported) {
-      return const UnsupportedScreen(
-        title: '此功能不支援',
-        message: '目前選擇的學校尚未支援此功能',
-      );
-    }
-    if (_error != null) {
-      return UnsupportedScreen(
-        title: '載入失敗',
-        message: _error!,
+    if (_isLoading || _unsupported || _error != null) {
+      return AsyncContentBuilder(
+        isLoading: _isLoading,
+        isUnsupported: _unsupported,
+        error: _error,
         onRetry: _loadData,
+        child: const SizedBox.shrink(),
       );
     }
 
@@ -101,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSection(String title, List<MeritDemeritRecord> records,
       {required bool isMerit}) {
     if (records.isEmpty) {
-      return _EmptyCard(title: title, message: '無$title記錄');
+      return EmptyTile(message: '無$title記錄');
     }
 
     return Column(
@@ -189,25 +183,4 @@ class _MeritCard extends StatelessWidget {
   }
 }
 
-class _EmptyCard extends StatelessWidget {
-  final String title;
-  final String message;
 
-  const _EmptyCard({required this.title, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline, color: Colors.grey),
-            const SizedBox(width: 12),
-            Text(message),
-          ],
-        ),
-      ),
-    );
-  }
-}

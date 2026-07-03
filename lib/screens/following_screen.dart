@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/cache_service.dart';
 import '../services/vocpass_auth_service.dart';
+import '../widgets/timetable_cells.dart';
 import 'unsupported_screen.dart';
 
 // MARK: - 追蹤名單
@@ -257,13 +258,13 @@ class _SharedCurriculumScreenState extends State<SharedCurriculumScreen> {
     final tableRows = <TableRow>[];
 
     tableRows.add(TableRow(children: [
-      _headerCell('節次'),
-      ..._weekdays.map((day) => _headerCell('週$day')),
+      const TimetableHeaderCell(text: '節次'),
+      ..._weekdays.map((day) => TimetableHeaderCell(text: '週$day')),
     ]));
 
     for (final period in periods) {
       tableRows.add(TableRow(children: [
-        _periodCell(period),
+        TimetablePeriodCell(text: period),
         ..._weekdays.map((day) => _subjectCell(_subjectAt(day, period))),
       ]));
     }
@@ -272,24 +273,6 @@ class _SharedCurriculumScreenState extends State<SharedCurriculumScreen> {
       border: TableBorder.all(color: Colors.grey[300]!, width: 1),
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: tableRows,
-    );
-  }
-
-  Widget _headerCell(String text) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      color: Colors.grey[200],
-      alignment: Alignment.center,
-      child: Text(text, style: const TextStyle(fontSize: 12)),
-    );
-  }
-
-  Widget _periodCell(String text) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      color: Colors.grey[100],
-      alignment: Alignment.center,
-      child: Text(text, style: const TextStyle(fontSize: 12)),
     );
   }
 

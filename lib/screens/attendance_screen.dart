@@ -4,7 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
-import 'unsupported_screen.dart';
+import '../widgets/async_content_builder.dart';
+import '../widgets/empty_tile.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -168,12 +169,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_unsupported) {
-      return const UnsupportedScreen(title: '此功能不支援', message: '目前選擇的學校尚未支援此功能');
-    }
-    if (_error != null) {
-      return UnsupportedScreen(title: '載入失敗', message: _error!, onRetry: _loadData);
+    if (_isLoading || _unsupported || _error != null) {
+      return AsyncContentBuilder(
+        isLoading: _isLoading,
+        isUnsupported: _unsupported,
+        error: _error,
+        onRetry: _loadData,
+        child: const SizedBox.shrink(),
+      );
     }
 
     final stats = _filteredStatistics;
@@ -205,7 +208,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   Text('各科缺曠統計', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
                   if (_subjectAbsences.isEmpty)
-                    const _EmptyTile(message: '無缺曠記錄')
+                    const EmptyTile(message: '無缺曠記錄')
                   else
                     ..._subjectAbsences
                         .where((e) => e.total > 0)
@@ -217,7 +220,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 if (grouped.isEmpty)
-                  _EmptyTile(message: _searchText.isEmpty ? '無缺曠記錄' : '找不到符合的記錄')
+                  EmptyTile(message: _searchText.isEmpty ? '無缺曠記錄' : '找不到符合的記錄')
                 else
                   ...grouped.map((g) => _AbsenceDayRow(
                         date: g.date,
@@ -527,21 +530,4 @@ class _Badge extends StatelessWidget {
   }
 }
 
-class _EmptyTile extends StatelessWidget {
-  final String message;
-  const _EmptyTile({required this.message});
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(children: [
-          const Icon(Icons.info_outline, color: Colors.grey),
-          const SizedBox(width: 12),
-          Text(message),
-        ]),
-      ),
-    );
-  }
-}
