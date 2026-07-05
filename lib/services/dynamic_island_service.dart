@@ -105,21 +105,34 @@ class DynamicIslandService {
       return;
     }
 
-    final currentLabel = current != null
-        ? '${current.period} ${current.subject} (${current.room})'
-        : '目前無上課';
-    final currentTime = current?.timeRange ?? '--:-- ~ --:--';
-    final currentCountdown = current != null
-        ? _formatDuration(_secondsUntil(now, current.endMinutes))
-        : '--:--:--';
+    final nextRemainingSec =
+        next != null ? _secondsUntil(now, next.startMinutes) : -1;
 
     final nextLabel = next != null
         ? '${next.period} ${next.subject} (${next.room})'
         : '下節課：無';
     final nextTime = next?.timeRange ?? '--:-- ~ --:--';
-    final nextCountdown = next != null
-        ? _formatDuration(_secondsUntil(now, next.startMinutes))
-        : '--:--:--';
+    final nextCountdown =
+        next != null ? _formatDuration(nextRemainingSec) : '--:--:--';
+
+    // 主倒數：上課中→倒數到下課；下課中(無 current 但有 next)→倒數到下一節開始。
+    final int currentRemainingSec;
+    final String currentLabel;
+    final String currentTime;
+    final String currentCountdown;
+    if (current != null) {
+      currentRemainingSec = _secondsUntil(now, current.endMinutes);
+      currentLabel = '${current.period} ${current.subject} (${current.room})';
+      currentTime = current.timeRange;
+      currentCountdown = _formatDuration(currentRemainingSec);
+    } else {
+      // 下課中：這節課區塊只顯示「下課中」，時間與倒數留給下方「下節課」呈現。
+      // （both null 已在上面 cancel 並 return，所以這裡 next 一定不為 null。）
+      currentRemainingSec = -1;
+      currentLabel = '下課中';
+      currentTime = '';
+      currentCountdown = '--:--:--';
+    }
 
     try {
       await _channel.invokeMethod<void>('showClassStatusNotification', {
@@ -129,6 +142,9 @@ class DynamicIslandService {
         'nextLabel': nextLabel,
         'nextTime': nextTime,
         'nextCountdown': nextCountdown,
+        // Chronometer 會自己每秒跳；傳剩餘秒數讓原生端算 base。-1 代表無。
+        'currentRemainingSec': currentRemainingSec,
+        'nextRemainingSec': nextRemainingSec,
       });
     } on PlatformException {
       // Ignore runtime errors to keep app stable.

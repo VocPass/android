@@ -44,20 +44,44 @@
         android:textColor="#444444"
         android:textSize="12sp" />
 
-    <TextView
-        android:id="@+id/big_current_countdown"
+    <LinearLayout
+        android:id="@+id/big_current_countdown_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:text="倒數：00:35:10"
-        android:textColor="#444444"
-        android:textSize="12sp" />
+        android:orientation="horizontal">
 
-    <View
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="倒數："
+            android:textColor="#444444"
+            android:textSize="12sp" />
+
+        <Chronometer
+            android:id="@+id/big_current_countdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#444444"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/big_current_countdown_static"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00:00"
+            android:textColor="#444444"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 分隔線：RemoteViews 不支援裸的 <View>，改用 LinearLayout 當細條 -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
+        android:orientation="horizontal"
         android:background="#22000000" />
 
     <TextView
@@ -89,12 +113,33 @@
         android:textColor="#444444"
         android:textSize="12sp" />
 
-    <TextView
-        android:id="@+id/big_next_countdown"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:text="倒數：01:35:10"
-        android:textColor="#444444"
-        android:textSize="12sp" />
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="倒數："
+            android:textColor="#444444"
+            android:textSize="12sp" />
+
+        <Chronometer
+            android:id="@+id/big_next_countdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#444444"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/big_next_countdown_static"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00:00"
+            android:textColor="#444444"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
 </LinearLayout>

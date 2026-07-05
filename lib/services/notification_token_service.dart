@@ -267,6 +267,8 @@ class NotificationTokenService {
 
       if (kDebugMode && (fcmToken == null || fcmToken.isEmpty)) {
         print('[NotifyToken] fcm token is empty ($reason), fallback upload with SSAID only');
+      } else if (kDebugMode) {
+        print('[NotifyToken] fcm token ($reason) = $fcmToken');
       }
 
       final isOpen = isOpenOverride ?? CacheService.instance.autoStartDynamicIsland;
