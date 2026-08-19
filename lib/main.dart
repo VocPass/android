@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -26,6 +28,9 @@ Future<void> main() async {
     await DynamicIslandService.instance.stopClassStatusSync();
   }
   await NotificationTokenService.instance.init();
+  // 每次開啟 app 都重新抓取 /school 並更新快取（不阻塞啟動）；
+  // 抓完後會依學校名稱套用最新設定並通知畫面更新。
+  unawaited(SchoolConfigManager.instance.loadSchools());
   runApp(
     MultiProvider(
       providers: [

@@ -22,6 +22,8 @@ class VocPassApp extends StatelessWidget {
     return MaterialApp(
       title: 'VocPass',
       theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: ThemeMode.system,
       home: const RootRouter(),
     );
   }

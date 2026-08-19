@@ -71,6 +71,12 @@ class SchoolConfig {
   String get loginedUrl => '$api${url.logined}';
   String get rootUrl => '$api${url.root}';
 
+  /// 原系統首頁網址，對應設定檔的 url.index
+  String? get indexUrl {
+    if (isGuest || url.index.isEmpty) return null;
+    return '$api${url.index}';
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -155,11 +161,13 @@ class RouteConfig {
 }
 
 class UrlConfig {
+  final String index;
   final String login;
   final String logined;
   final String root;
 
   const UrlConfig({
+    this.index = '',
     required this.login,
     required this.logined,
     required this.root,
@@ -167,6 +175,7 @@ class UrlConfig {
 
   factory UrlConfig.fromJson(Map<String, dynamic> json) {
     return UrlConfig(
+      index: json['index']?.toString() ?? '',
       login: json['login']?.toString() ?? '',
       logined: json['logined']?.toString() ?? '',
       root: json['root']?.toString() ?? '',
@@ -174,6 +183,7 @@ class UrlConfig {
   }
 
   Map<String, dynamic> toJson() => {
+        'index': index,
         'login': login,
         'logined': logined,
         'root': root,

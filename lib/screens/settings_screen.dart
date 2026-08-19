@@ -10,6 +10,7 @@ import '../services/dynamic_island_service.dart';
 import '../services/notification_token_service.dart';
 import '../services/school_config_manager.dart';
 import '../services/vocpass_auth_service.dart';
+import '../widgets/grouped_list.dart';
 import 'edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -51,14 +52,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('設定')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(bottom: 32),
         children: [
           // VocPass 帳號
-          Text('VocPass 帳號', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: Column(
-              children: [
+          const SectionHeader('VocPass 帳號'),
+          GroupedCard(
+            children: [
                 if (vocPassAuth.isLoggedIn && vocPassAuth.currentUser != null) ...[
                   ListTile(
                     leading: CircleAvatar(
@@ -111,18 +110,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: const Text('登入後可追蹤他人課表、分享課表'),
                     onTap: () => _openUrl('${AppConfig.vocPassApiHost}/auth'),
                   ),
-              ],
-            ),
+            ],
           ),
 
-          const SizedBox(height: 16),
-
           // 學校設定
-          Text('學校設定', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: Column(
-              children: [
+          const SectionHeader('學校設定'),
+          GroupedCard(
+            children: [
                 if (schoolManager.selectedSchool != null)
                   ListTile(
                     leading: const Icon(Icons.school),
@@ -143,17 +137,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: const Text('登出學校帳號'),
                     onTap: api.logout,
                   ),
-              ],
-            ),
+            ],
           ),
 
-          const SizedBox(height: 16),
-
           // 動態通知
-          Text('動態通知', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: SwitchListTile(
+          const SectionHeader('動態通知'),
+          GroupedCard(
+            children: [
+              SwitchListTile(
               secondary: const Icon(Icons.notifications_active_outlined),
               title: const Text('啟用動態通知'),
               subtitle: const Text('顯示這節課、下節課與倒數時間'),
@@ -175,16 +166,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               },
             ),
+            ],
           ),
 
-          const SizedBox(height: 16),
-
           // 課表設定
-          Text('課表', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: Column(
-              children: [
+          const SectionHeader('課表'),
+          GroupedCard(
+            children: [
                 ListTile(
                   leading: const Icon(Icons.format_list_numbered),
                   title: const Text('每天節數'),
@@ -207,25 +195,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
-
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text('最少顯示節數；若課表資料超過此數，會自動延伸顯示。預設 7 節。',
-                style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-          ),
-
-          const SizedBox(height: 16),
+          const SectionFootnote('最少顯示節數；若課表資料超過此數，會自動延伸顯示。預設 7 節。'),
 
           // 缺曠統計
-          Text('缺曠統計', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: Column(
-              children: [
+          const SectionHeader('缺曠統計'),
+          GroupedCard(
+            children: [
                 ListTile(
                   leading: const Icon(Icons.calendar_month),
                   title: const Text('每學期週數'),
@@ -248,25 +225,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
-
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text('用於計算各科缺曠百分比，預設 18 週。',
-                style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-          ),
-
-          const SizedBox(height: 16),
+          const SectionFootnote('用於計算各科缺曠百分比，預設 18 週。'),
 
           // 關於
-          Text('關於', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: Column(
-              children: [
+          const SectionHeader('關於'),
+          GroupedCard(
+            children: [
                 ListTile(
                   title: const Text('版本'),
                   trailing: Text(_version,
@@ -296,17 +262,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: const Icon(Icons.open_in_new, size: 16, color: Colors.grey),
                   onTap: () => _openUrl('https://forum.vocpass.com'),
                 ),
-              ],
-            ),
+            ],
           ),
 
-          const SizedBox(height: 16),
-
           // 開發者
-          Text('開發者', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: ExpansionTile(
+          const SectionHeader('開發者'),
+          GroupedCard(
+            children: [
+              ExpansionTile(
               title: const Text('Cookies'),
               children: [
                 if (api.cookies.isEmpty)
@@ -323,8 +286,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       )),
               ],
             ),
+            ],
           ),
-          const SizedBox(height: 32),
         ],
       ),
     );
