@@ -7,6 +7,7 @@ import '../services/school_config_manager.dart';
 import '../widgets/grouped_list.dart';
 import 'attendance_screen.dart';
 import 'curriculum_screen.dart';
+import 'data_export_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 import 'original_system_screen.dart';
@@ -184,6 +185,23 @@ class SchoolAffairsScreen extends StatelessWidget {
             ),
           ],
         ),
+
+        // 資料匯出
+        const SizedBox(height: 8),
+        GroupedCard(
+          children: [
+            _SchoolAffairsTile(
+              icon: Icons.download,
+              title: '資料匯出',
+              enabled: api.isLoggedIn,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DataExportScreen()),
+              ),
+            ),
+          ],
+        ),
+        const SectionFootnote('將校務資料匯出成 JSON 檔，可到線上工具開啟檢視。'),
 
         // 前往原系統
         if (school.indexUrl != null) ...[

@@ -179,6 +179,19 @@ class ApiService extends ChangeNotifier {
     return json;
   }
 
+  /// 取得某個 API 端點的原始 payload，不轉成 model。
+  ///
+  /// 供資料匯出使用：匯出的 JSON 需保留上游回傳的欄位形狀。
+  Future<dynamic> fetchRawPayload(
+    String path, {
+    List<MapEntry<String, String>> extraQuery = const [],
+  }) async {
+    final response = await _proxyGetData(path, extraQuery: extraQuery);
+    final json = jsonDecode(response.body);
+    _checkApiStatus(json);
+    return _extractPayload(json);
+  }
+
   Future<(List<MeritDemeritRecord>, List<MeritDemeritRecord>)>
       fetchMeritDemeritRecords() async {
     final response = await _proxyGetData('merit_demerit');
